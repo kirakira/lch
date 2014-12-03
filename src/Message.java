@@ -2,15 +2,15 @@ import java.io.*;
 
 public class Message implements Serializable {
     static final long serialVersionUID = -6406061878963820303L;
-    public String senderAddress;
-    public int senderPort;
+    public String replyAddress;
+    public int replyPort;
     public String title;
     public Serializable content;
 
-    public Message(String senderAddress, int senderPort, String title,
+    public Message(String replyAddress, int replyPort, String title,
             Serializable content) {
-        this.senderAddress = senderAddress;
-        this.senderPort = senderPort;
+        this.replyAddress = replyAddress;
+        this.replyPort = replyPort;
         this.title = title;
         this.content = content;
     }

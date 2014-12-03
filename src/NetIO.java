@@ -113,7 +113,7 @@ public class NetIO {
             try {
                 MessageSocket messageSocket = new MessageSocket(socket);
                 Message msg = (Message) messageSocket.receiveMessage();
-                msg.senderAddress = socket.getInetAddress().getHostAddress();
+                msg.replyAddress = socket.getInetAddress().getHostAddress();
 
                 LockAndQueue lq;
                 synchronized(receivedMessages) {

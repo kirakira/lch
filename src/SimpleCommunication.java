@@ -65,7 +65,7 @@ public class SimpleCommunication {
     public static void display(String who, Message m) {
         MyMessage mm = (MyMessage) m.content;
         System.out.println(who + " received a message from "
-                + m.senderAddress + ":" + m.senderPort
+                + m.replyAddress + ":" + m.replyPort
                 + " titled " + m.title + ": " + mm.value + ", " + mm.string);
     }
 }
