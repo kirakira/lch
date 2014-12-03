@@ -29,7 +29,8 @@ public class NetIO {
         try {
             MessageSocket socket = new MessageSocket(
                     new Socket(host, port));
-            socket.sendMessage(new TitledMessage(title, message));
+            socket.sendMessage(new Message(null, serverSocket.getLocalPort(),
+                        title, message));
             socket.close();
         } catch (UnknownHostException e) {
            e.printStackTrace();
@@ -48,7 +49,7 @@ public class NetIO {
      *
      * timeout is in nanoseconds.
      */
-    public Serializable receiveMessage(String title, long timeout) {
+    public Message receiveMessage(String title, long timeout) {
         LockAndQueue lq;
         synchronized(receivedMessages) {
             if (!receivedMessages.containsKey(title))
@@ -111,7 +112,8 @@ public class NetIO {
         public void run() {
             try {
                 MessageSocket messageSocket = new MessageSocket(socket);
-                TitledMessage msg = (TitledMessage) messageSocket.receiveMessage();
+                Message msg = (Message) messageSocket.receiveMessage();
+                msg.senderAddress = socket.getInetAddress().getHostAddress();
 
                 LockAndQueue lq;
                 synchronized(receivedMessages) {
@@ -122,7 +124,7 @@ public class NetIO {
 
                 lq.lock.lock();
                 try {
-                    lq.queue.add(msg.message);
+                    lq.queue.add(msg);
                     lq.condition.signal();
                 } finally {
                     lq.lock.unlock();
@@ -140,17 +142,6 @@ public class NetIO {
         }
     }
 
-    private static class TitledMessage implements Serializable {
-        static final long serialVersionUID = -8151228077545115970L;
-        public String title;
-        public Serializable message;
-
-        public TitledMessage(String title, Serializable message) {
-            this.title = title;
-            this.message = message;
-        }
-    }
-
     private volatile ServerSocket serverSocket;
     private final Map<String, LockAndQueue> receivedMessages
         = new HashMap<String, LockAndQueue>();
@@ -159,7 +150,7 @@ public class NetIO {
 class LockAndQueue {
     final Lock lock = new ReentrantLock();
     final Condition condition = lock.newCondition();
-    final Queue<Serializable> queue = new LinkedList<Serializable>();
+    final Queue<Message> queue = new LinkedList<Message>();
 }
 
 class MessageSocket {
@@ -172,14 +163,6 @@ class MessageSocket {
         oos = new ObjectOutputStream(new BufferedOutputStream(socket.getOutputStream()));
         oos.flush();
         ois = new ObjectInputStream(new BufferedInputStream(socket.getInputStream()));
-    }
-
-    public InetAddress getInetAddress() {
-        return socket.getInetAddress();
-    }
-
-    public int getPort() {
-        return socket.getPort();
     }
 
     public void sendMessage(Serializable message) throws IOException {

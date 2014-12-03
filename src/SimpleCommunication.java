@@ -42,7 +42,7 @@ public class SimpleCommunication {
 
         public void run() {
             net.sendMessage("localhost", portB, "Greeting", new MyMessage(13, "Ha Ha ha.."));
-            display("A", (MyMessage) net.receiveMessage("Bye", 10 * NetIO.numNanosPerSecond));
+            display("A", net.receiveMessage("Bye", 10 * NetIO.numNanosPerSecond));
             net.close();
         }
     }
@@ -55,14 +55,17 @@ public class SimpleCommunication {
         }
 
         public void run() {
-            display("B", (MyMessage) net.receiveMessage("Greeting", 10 * NetIO.numNanosPerSecond));
+            display("B", net.receiveMessage("Greeting", 10 * NetIO.numNanosPerSecond));
             net.sendMessage("localhost", portA, "irrelavent", new MyMessage(13, "This message should not be displayed"));
             net.sendMessage("localhost", portA, "Bye", new MyMessage(0, "Gun cu!"));
             net.close();
         }
     }
 
-    public static void display(String who, MyMessage m) {
-        System.out.println(who + " received a message: " + m.value + ", " + m.string);
+    public static void display(String who, Message m) {
+        MyMessage mm = (MyMessage) m.content;
+        System.out.println(who + " received a message from "
+                + m.senderAddress + ":" + m.senderPort
+                + " titled " + m.title + ": " + mm.value + ", " + mm.string);
     }
 }
