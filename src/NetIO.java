@@ -39,8 +39,13 @@ public class NetIO {
     }
 
     /**
-     * Wait for a message with the given title, or until time expires.
-     * If time expired before the message is received, returns null.
+     * Wait for a message with the given title, or until time expires. If more than
+     * one thread is waiting for the message with the same title, an arbitrary thread
+     * will be selected to receive the message.
+     *
+     * If time expired before the message is received, returns null; otherwise returns
+     * the message received.
+     *
      * timeout is in nanoseconds.
      */
     public Serializable receiveMessage(String title, long timeout) {
