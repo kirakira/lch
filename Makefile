@@ -2,4 +2,4 @@
 
 all:
 	mkdir -p bin/
-	javac -d bin -cp bin src/*.java
+	javac -d bin -cp bin -Xlint src/*.java
