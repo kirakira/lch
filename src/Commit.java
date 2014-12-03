@@ -6,4 +6,8 @@ public class Commit implements Serializable {
 
     public int commitId;
     public HashMap<String, byte[]> changedFiles;
+    public Set<String> removedFiles;
+    public long nanoTimestamp;
+    public String author;
+    public String message;
 }
