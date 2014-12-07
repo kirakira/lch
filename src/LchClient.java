@@ -73,7 +73,7 @@ public class LchClient {
 		while (msg == null && (numRetry++) < maxNumRetry) {
 			Server server = pickRandomServer();
 			net.sendMessage(server.addr, server.port, "SyncRequest", syncReq);
-			msg = net.receiveMessage(syncReq.responseTitle, net.numNanosPerSecond * 10);
+			msg = net.receiveMessage(syncReq.responseTitle, NetIO.numNanosPerSecond * 10);
 		}
 		if (msg == null) {
 			System.err.println("Network is unstable");
@@ -92,7 +92,7 @@ public class LchClient {
 		while (msg == null && (numRetry++) < maxNumRetry) {
 			Server server = pickRandomServer();
 			net.sendMessage(server.addr, server.port, "SyncRequest", commitReq);
-			msg = net.receiveMessage(commitReq.responseTitle, net.numNanosPerSecond * 10);
+			msg = net.receiveMessage(commitReq.responseTitle, NetIO.numNanosPerSecond * 10);
 		}
 		if (msg == null) {
 			System.err.println("Network is unstable");
