@@ -1,6 +1,12 @@
 import java.io.*;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Random;
+import java.util.Set;
 import java.util.TreeMap;
 import java.util.Vector;
 
@@ -18,7 +24,8 @@ public class LchClient {
 	private final static String lchDir = ".lch/";
 	private final String serverListFile = lchDir + "servers";
 	private static final String fileMetadataFile = lchDir + "metadata";
-	private static TreeMap<String, String> fileDigests;
+	private static HashMap<String, String> fileDigests;
+	private static int version = 0;
 	
 	// <IP, Port>
 	private Vector<Server> serverList;
@@ -73,6 +80,7 @@ public class LchClient {
 		try {
 			FileOutputStream fos = new FileOutputStream(fileMetadataFile);
 			ObjectOutputStream oos = new ObjectOutputStream(fos);
+			oos.writeInt(version);
 			oos.writeObject(fileDigests);
 			oos.close();
 		} catch (IOException e) {
@@ -80,13 +88,16 @@ public class LchClient {
 		}
 	}
 	
-	private static TreeMap<String, String> fileHashFromFile() {
-		TreeMap<String, String> curFileDigests = null;
+	@SuppressWarnings("unchecked")
+	private static HashMap<String, String> fileHashFromFile() {
+		HashMap<String, String> curFileDigests = null;
 		try {
 			FileInputStream fis;
 			fis = new FileInputStream(fileMetadataFile);
 			ObjectInputStream ois = new ObjectInputStream(fis);
-			curFileDigests = (TreeMap<String, String>) ois.readObject();
+			//int tmpVersion = 
+			ois.readInt();
+			curFileDigests = (HashMap<String, String>) ois.readObject();
 			ois.close();
 		} catch (IOException | ClassNotFoundException e) {
 			// TODO Auto-generated catch block
@@ -101,7 +112,7 @@ public class LchClient {
 	}
 	
 	public boolean init() {
-		fileDigests = new TreeMap<String, String>();
+		fileDigests = new HashMap<String, String>();
 		net = new NetIO(port);
 		randomGen = new Random();
 		serverList = new Vector<Server>();
@@ -119,10 +130,15 @@ public class LchClient {
 		net.close();
 	}
 	
+	private String genRandomString() {
+		long seed = randomGen.nextLong();
+		return HashUtils.genMD5(new String(Long.toString(seed)));
+	}
+	
 	private boolean doSync(Command cmd) {
 		System.out.println("doSync");
 		SyncRequest syncReq = new SyncRequest();
-		syncReq.responseTitle = "random string";
+		syncReq.responseTitle = genRandomString();
 		Message msg = null;
 		int numRetry = 0;
 		while (msg == null && (numRetry++) < maxNumRetry) {
@@ -141,7 +157,35 @@ public class LchClient {
 	private boolean doCommit(Command cmd) {
 		System.out.println("doCommit");
 		CommitRequest commitReq = new CommitRequest();
-		commitReq.responseTitle = "random string";
+		commitReq.responseTitle = genRandomString();
+		
+		// Get historical hash value from meta data file
+		HashMap<String, String> oldFileDigests = fileHashFromFile();
+		hashFiles(".");
+		@SuppressWarnings("unchecked")
+		HashMap<String, String> curFileDigests = (HashMap<String, String>) fileDigests.clone();
+
+		Commit commit = new Commit();
+		commit.commitId = version + 1;
+		commit.removedFiles.addAll((Set<String>) oldFileDigests.keySet());
+		commit.removedFiles.removeAll(curFileDigests.keySet());
+
+		Iterator<String> it = curFileDigests.keySet().iterator();
+		while (it.hasNext()) {
+			String tmpKey = it.next();
+			if (oldFileDigests.get(tmpKey) != curFileDigests.get(tmpKey)) {
+				Path path = Paths.get(tmpKey);
+				try {
+					commit.changedFiles.put(tmpKey, Files.readAllBytes(path));
+				} catch (IOException e) {
+					e.printStackTrace();
+				}
+			}
+		}
+		
+		commitReq.baseCommit = version;
+		commitReq.proposedCommit = commit;
+		
 		Message msg = null;
 		int numRetry = 0;
 		while (msg == null && (numRetry++) < maxNumRetry) {
@@ -154,7 +198,11 @@ public class LchClient {
 			return false;
 		}
 		CommitResponse commitRes = (CommitResponse) msg.content;
-		return true;
+		if (!commitRes.accepted) {
+			System.out.println(commitRes.comment);
+			return false;
+		}
+		return commitRes.accepted;
 	}
 	
 	public void run(Command cmd) {
