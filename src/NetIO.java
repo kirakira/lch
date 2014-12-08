@@ -38,6 +38,15 @@ public class NetIO {
            e.printStackTrace();
         }
     }
+    
+    public void sendMessage(String hostAndPort, String title, Serializable message) {
+        int pos = hostAndPort.indexOf(":");
+        if (pos != -1) {
+            String host = hostAndPort.substring(0, pos);
+            int port = Integer.parseInt(hostAndPort.substring(pos + 1));
+            sendMessage(host, port, title, message);
+        }
+    }
 
     /**
      * Wait for a message with the given title, or until time expires. If more than

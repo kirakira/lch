@@ -19,4 +19,16 @@ public class Commit implements Serializable {
         author = "";
         message = "";
     }
+
+    public boolean equals(Object o) {
+        if (!(o instanceof Commit))
+            return false;
+        Commit x = (Commit) o;
+        return commitId == x.commitId
+            && changedFiles.equals(x.changedFiles)
+            && removedFiles.equals(x.removedFiles)
+            && nanoTimestamp == x.nanoTimestamp
+            && author.equals(x.author)
+            && message.equals(x.message);
+    }
 }
