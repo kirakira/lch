@@ -158,7 +158,7 @@ public class LchClient {
 	}
 	
 	private boolean doCommit(Command cmd) {
-		System.out.println("doCommit");
+		//System.out.println("doCommit");
 		CommitRequest commitReq = new CommitRequest();
 		commitReq.responseTitle = genRandomString();
 		
@@ -197,8 +197,13 @@ public class LchClient {
 		int numRetry = 0;
 		while (msg == null && (numRetry++) < maxNumRetry) {
 			Server server = pickRandomServer();
+			System.out.print("Try to connect " + server.addr + ":" + server.port);
 			net.sendMessage(server.addr, server.port, "CommitRequest", commitReq);
 			msg = net.receiveMessage(commitReq.responseTitle, NetIO.numNanosPerSecond * 10);
+			if (msg == null)
+				System.out.println("...Failed");
+			else 
+				System.out.println("...Success");
 		}
 		if (msg == null) {
 			System.err.println("Network is unstable");
@@ -206,10 +211,11 @@ public class LchClient {
 		}
 		CommitResponse commitRes = (CommitResponse) msg.content;
 		if (!commitRes.accepted) {
-			System.out.println(commitRes.comment);
+			System.out.println("FAILED Comments: " + commitRes.comment);
 		} else {
 			version ++;
 			fileHashToFile();
+			System.out.println("SUCCESS");
 		}
 		return commitRes.accepted;
 	}
