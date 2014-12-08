@@ -116,6 +116,7 @@ public class LchServer {
 
     private class CommitHandler implements Runnable {
         public void run() {
+outerloop:
             while (!closing) {
                 Message msg = net.receiveMessage("CommitRequest", 2 * NetIO.numNanosPerSecond);
                 if (msg == null)
@@ -140,7 +141,15 @@ public class LchServer {
                 int highestCommit = -1;
                 while (promise * 2 <= serverList.size() && rejectPrepare * 2 <= serverList.size()) {
                     Message prepareReplyMessage = net.receiveMessage(prepare.responseTitle, 10 * NetIO.numNanosPerSecond);
-                    if (prepareReplyMessage == null || !(prepareReplyMessage.content instanceof PaxosMessage))
+                    if (prepareReplyMessage == null) {
+                        CommitResponse reply = new CommitResponse();
+                        reply.accepted = false;
+                        reply.comment = "Paxos prepare timed out";
+                        net.sendMessage(msg.replyAddress, msg.replyPort, req.responseTitle, reply);
+                        System.out.println("Prepare timed out");
+                        continue outerloop;
+                    }
+                    if (!(prepareReplyMessage.content instanceof PaxosMessage))
                         continue;
                     PaxosMessage respond = (PaxosMessage) prepareReplyMessage.content;
                     if (respond.type == PaxosMessage.Type.Promise) {
