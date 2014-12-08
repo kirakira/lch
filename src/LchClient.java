@@ -175,7 +175,7 @@ public class LchClient {
 			commit.author = "anonymous";
 		commit.nanoTimestamp = System.nanoTime();
 		commit.commitId = version + 1;
-		commit.removedFiles.addAll((Set<String>) oldFileDigests.keySet());
+		commit.removedFiles.addAll(oldFileDigests.keySet());
 		commit.removedFiles.removeAll(curFileDigests.keySet());
 
 		Iterator<String> it = curFileDigests.keySet().iterator();
@@ -185,8 +185,6 @@ public class LchClient {
 				Path path = Paths.get(tmpKey);
 				try {
 					commit.changedFiles.put(tmpKey, Files.readAllBytes(path));
-					byte [] bytes = Files.readAllBytes(path);
-					System.out.println();
 				} catch (IOException e) {
 					e.printStackTrace();
 				}
