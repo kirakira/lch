@@ -44,8 +44,10 @@ public class Commit implements Serializable {
             return Arrays.hashCode(a);
         }
 
-        public boolean equals(ArrayWrapper t) {
-            return Arrays.equals(a, t.a);
+        public boolean equals(Object t) {
+            if (!(t instanceof ArrayWrapper))
+                return false;
+            return Arrays.equals(a, ((ArrayWrapper) t).a);
         }
     }
 
