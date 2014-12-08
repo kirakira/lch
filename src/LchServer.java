@@ -45,6 +45,11 @@ public class LchServer {
     }
 
     public static final void main(String[] args) {
+        if (args.length < 3) {
+            System.out.println("Usage: java LchServer port serverId serverList [n]");
+            return;
+        }
+
         int port = Integer.parseInt(args[0]);
         int serverId = Integer.parseInt(args[1]);
         List<String> serverList = new ArrayList<String>();
@@ -63,6 +68,8 @@ public class LchServer {
             if (s.equals("quit")) {
                 server.close();
                 break;
+            } else if (s.equals("status")) {
+                System.out.println("Latest commit is " + server.latestCommitId());
             }
         }
     }
@@ -74,6 +81,17 @@ public class LchServer {
         } finally {
             paxosLock.unlock();
         }
+    }
+
+    public int latestCommitId() {
+        int ret = 0;
+        paxosLock.lock();
+        try {
+            ret = updateLog.size() - 1;
+        } finally {
+            paxosLock.unlock();
+        }
+        return ret;
     }
 
     public void close() {
