@@ -29,12 +29,21 @@ public class LchServer {
         syncThread.start();
         commitThread.start();
         acceptorLearnerThread.start();
+    }
 
+    public static final void main(String[] args) {
+        int port = Integer.parseInt(args[0]);
+        int serverId = Integer.parseInt(args[1]);
+        List<String> serverList = new ArrayList<String>();
+        for (String s: args[2].split(","))
+            serverList.add(s);
+
+        LchServer server = new LchServer(port, serverId, serverList);
         Scanner scan = new Scanner(System.in);
         while (true) {
             String s = scan.nextLine();
             if (s.equals("quit")) {
-                close();
+                server.close();
                 break;
             }
         }
