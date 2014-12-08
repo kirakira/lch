@@ -26,6 +26,13 @@ public class LchServer {
         restoreState();
         if (catchupMode)
             catchUp();
+        for (int i = 0; i < updateLog.size(); ++i)
+            if (updateLog.get(i).commitId != i) {
+                System.err.println("Inconsistent update log!");
+                close();
+                throw new RuntimeException("Inconsistent update log");
+            }
+        System.out.println("Latest commit is " + updateLog.get(updateLog.size() - 1).commitId);
 
         syncThread = new Thread(new SyncHandler());
         commitThread = new Thread(new CommitHandler());
@@ -103,17 +110,19 @@ public class LchServer {
         for (String s: serverList) {
             UpdateLogRequest req = new UpdateLogRequest();
             req.responseTitle = randomTitle();
-            req.baseCommit = updateLog.size();
+            req.baseCommit = updateLog.size() - 1;
             net.sendMessage(s, "UpdateLog", req);
             Message ret = net.receiveMessage(req.responseTitle, 5 * NetIO.numNanosPerSecond);
             if (ret == null)
                 continue;
-            if (!(ret.content instanceof List))
+            if (!(ret.content instanceof ArrayList))
                 continue;
             @SuppressWarnings("unchecked")
             List<Commit> commits = (List<Commit>) ret.content;
-            if (commits.size() > 0 && commits.get(0).commitId > updateLog.size())
+            if (commits.size() > 0 && commits.get(0).commitId > updateLog.size()) {
+                System.out.println(commits.get(0).commitId);
                 continue;
+            }
             paxosLock.lock();
             try {
                 mergeCommits(updateLog, commits);
@@ -136,6 +145,15 @@ public class LchServer {
         if (!catchUpdateLog())
             System.err.println("Warning: catch upate log 2 failed");
         System.out.println("Step 3 finished");
+        paxosLock.lock();
+        try {
+            if (updateLog.size() >= 2 && updateLog.get(updateLog.size() - 1).commitId > updateLog.get(updateLog.size() - 2).commitId + 1) {
+                updateLog.remove(updateLog.size() - 1);
+                System.out.println("Removed redundant update log");
+            }
+        } finally {
+            paxosLock.unlock();
+        }
     }
 
     private class UpdateLogRequestHandler implements Runnable {
