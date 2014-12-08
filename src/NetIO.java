@@ -34,6 +34,7 @@ public class NetIO {
             socket.close();
         } catch (UnknownHostException e) {
            e.printStackTrace();
+        } catch (ConnectException e) {
         } catch (IOException e) {
            e.printStackTrace();
         }
