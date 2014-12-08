@@ -10,6 +10,7 @@ public class LchServer {
     private volatile Thread syncThread, commitThread, acceptorLearnerThread;
     private volatile List<String> serverList;
     private int lastPaxosDecision = -1;
+    private volatile Set<Integer> paxosLearned = new HashSet<Integer>();
 
     final Lock paxosLock = new ReentrantLock();
     final Condition paxosCondition = paxosLock.newCondition();
@@ -227,7 +228,6 @@ public class LchServer {
             Commit lastAccept = null;
             Map<Integer, Integer> acceptedCounter = new HashMap<Integer, Integer>(),
                 rejectedCounter = new HashMap<Integer, Integer>();
-            Set<Integer> learned = new HashSet<Integer>();
 
             while (!closing) {
                 Message msg = net.receiveMessage("Paxos", 2 * NetIO.numNanosPerSecond);
@@ -278,10 +278,10 @@ public class LchServer {
                     acceptedCounter.put(paxosMessage.proposalNumber,
                             acceptedCounter.get(paxosMessage.proposalNumber) + 1);
                     if (acceptedCounter.get(paxosMessage.proposalNumber) * 2 >
-                            serverList.size() && !learned.contains(paxosMessage.proposalNumber)) {
+                            serverList.size() && !paxosLearned.contains(paxosMessage.proposalNumber)) {
                         paxosLock.lock();
                         System.out.println("Learning proposal " + paxosMessage.proposalNumber);
-                        learned.add(paxosMessage.proposalNumber);
+                        paxosLearned.add(paxosMessage.proposalNumber);
                         try {
                             if (updateLog.size() == paxosMessage.commit.commitId) {
                                 updateLog.add(paxosMessage.commit);
