@@ -24,12 +24,39 @@ public class Commit implements Serializable {
         if (!(o instanceof Commit))
             return false;
         Commit x = (Commit) o;
+        if (!equalsChangedFiles(changedFiles, x.changedFiles))
+            return false;
         return commitId == x.commitId
-            && changedFiles.equals(x.changedFiles)
             && removedFiles.equals(x.removedFiles)
             && nanoTimestamp == x.nanoTimestamp
             && author.equals(x.author)
             && message.equals(x.message);
+    }
+
+    public static class ArrayWrapper {
+        public byte[] a;
+
+        public ArrayWrapper(byte[] x) {
+            a = x;
+        }
+
+        public int hashCode() {
+            return Arrays.hashCode(a);
+        }
+
+        public boolean equals(ArrayWrapper t) {
+            return Arrays.equals(a, t.a);
+        }
+    }
+
+    public static boolean equalsChangedFiles(Map<String, byte[]> a, Map<String, byte[]> b) {
+        Map<String, ArrayWrapper> ma = new HashMap<String, ArrayWrapper>(),
+            mb = new HashMap<String, ArrayWrapper>();
+        for (Map.Entry<String, byte[]> t: a.entrySet())
+            ma.put(t.getKey(), new ArrayWrapper(t.getValue()));
+        for (Map.Entry<String, byte[]> t: b.entrySet())
+            mb.put(t.getKey(), new ArrayWrapper(t.getValue()));
+        return ma.equals(mb);
     }
 
     public String toString() {

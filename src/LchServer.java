@@ -176,6 +176,8 @@ public class LchServer {
                         net.sendMessage(msg.replyAddress, msg.replyPort, req.responseTitle, reply);
                         continue;
                     }
+                    System.out.println("update log size: " + updateLog.size());
+                    System.out.println("most recent commit: " + updateLog.get(updateLog.size() - 1).toString());
                     if (updateLog.size() > req.proposedCommit.commitId
                             && req.proposedCommit.commitId >= 0
                             && updateLog.get(req.proposedCommit.commitId).equals(req.proposedCommit)) {
