@@ -7,7 +7,8 @@ public class LchServer {
     private volatile NetIO net;
     private List<Commit> updateLog;
     private volatile boolean closing = false;
-    private volatile Thread syncThread, commitThread, acceptorLearnerThread;
+    private volatile Thread syncThread, commitThread,
+            acceptorLearnerThread, updateLogRequestThread;
     private volatile List<String> serverList;
     private int lastPaxosDecision = -1;
     private volatile Set<Integer> paxosLearned = new HashSet<Integer>();
@@ -23,13 +24,16 @@ public class LchServer {
         net = new NetIO(port);
         updateLog = new ArrayList<Commit>();
         restoreState();
+        catchUp();
 
         syncThread = new Thread(new SyncHandler());
         commitThread = new Thread(new CommitHandler());
-        acceptorLearnerThread = new Thread(new AcceptorLearner());
+        acceptorLearnerThread = new Thread(new AcceptorLearner(false));
+        updateLogRequestThread = new Thread(new UpdateLogRequestHandler());
         syncThread.start();
         commitThread.start();
         acceptorLearnerThread.start();
+        updateLogRequestThread.start();
     }
 
     public static final void main(String[] args) {
@@ -67,9 +71,97 @@ public class LchServer {
             syncThread.join();
             commitThread.join();
             acceptorLearnerThread.join();
+            updateLogRequestThread.join();
             net.close();
         } catch (InterruptedException e) {
         }
+    }
+
+    private void mergeCommits(List<Commit> commits1, List<Commit> commits2) {
+        for (Commit c: commits2) {
+            if (commits1.get(commits1.size() - 1).commitId < c.commitId) {
+                commits1.add(c);
+                continue;
+            }
+            for (int i = 0; i < commits1.size(); ++i) {
+                if (commits1.get(i).commitId == c.commitId) {
+                    commits1.set(i, c);
+                    break;
+                } else if (commits1.get(i).commitId > c.commitId) {
+                    commits1.add(i, c);
+                    break;
+                }
+            }
+        }
+    }
+
+    private boolean catchUpdateLog() {
+        for (String s: serverList) {
+            UpdateLogRequest req = new UpdateLogRequest();
+            req.responseTitle = randomTitle();
+            req.baseCommit = updateLog.size();
+            net.sendMessage(s, "UpdateLog", req);
+            Message ret = net.receiveMessage(req.responseTitle, 5 * NetIO.numNanosPerSecond);
+            if (ret == null)
+                continue;
+            if (!(ret.content instanceof List))
+                continue;
+            @SuppressWarnings("unchecked")
+            List<Commit> commits = (List<Commit>) ret.content;
+            if (commits.size() > 0 && commits.get(0).commitId > updateLog.size())
+                continue;
+            paxosLock.lock();
+            try {
+                mergeCommits(updateLog, commits);
+            } finally {
+                paxosLock.unlock();
+            }
+            return true;
+        }
+        return false;
+    }
+
+    private void catchUp() {
+        System.out.println("Start in catch-up mode");
+        if (!catchUpdateLog())
+            System.err.println("Warning: catch upate log failed");
+        else
+            System.out.println("Step 1 finished");
+        new AcceptorLearner(true).run();
+        System.out.println("Step 2 finished");
+        if (!catchUpdateLog())
+            System.err.println("Warning: catch upate log 2 failed");
+        System.out.println("Step 3 finished");
+    }
+
+    private class UpdateLogRequestHandler implements Runnable {
+        public void run() {
+            while (!closing) {
+                Message msg = net.receiveMessage("UpdateLog", 2 * NetIO.numNanosPerSecond);
+                if (msg == null)
+                    continue;
+                if (!(msg.content instanceof UpdateLogRequest))
+                    continue;
+
+                UpdateLogRequest req = (UpdateLogRequest) msg.content;
+                paxosLock.lock();
+                try {
+                    ArrayList<Commit> response = new ArrayList<Commit>();
+                    for (int i = Math.max(0, req.baseCommit + 1); i < updateLog.size(); ++i)
+                        response.add(updateLog.get(i));
+                    net.sendMessage(msg.replyAddress, msg.replyPort, req.responseTitle, response);
+                } finally {
+                    paxosLock.unlock();
+                }
+            }
+        }
+    }
+
+    private static class UpdateLogRequest implements Serializable {
+        static final long serialVersionUID = 8306525401762584161L;
+
+        public String responseTitle;
+        int baseCommit;
     }
 
     private class SyncHandler implements Runnable {
@@ -231,14 +323,21 @@ outerloop:
     }
 
     private class AcceptorLearner implements Runnable {
+        boolean observerMode = false;
+
+        public AcceptorLearner(boolean ob) {
+            observerMode = ob;
+        }
+
         public void run() {
             int lastPromise = -1;
             int lastAcceptNumber = -1;
             Commit lastAccept = null;
             Map<Integer, Integer> acceptedCounter = new HashMap<Integer, Integer>(),
                 rejectedCounter = new HashMap<Integer, Integer>();
+            boolean finishOneRound = false;
 
-            while (!closing) {
+            while (!closing && (!observerMode || !finishOneRound)) {
                 Message msg = net.receiveMessage("Paxos", 2 * NetIO.numNanosPerSecond);
                 if (msg == null)
                     continue;
@@ -249,37 +348,41 @@ outerloop:
                 PaxosMessage paxosMessage = (PaxosMessage) msg.content;
                 if (paxosMessage.type == PaxosMessage.Type.Prepare) {
                     System.out.println("Prepare received with proposal number " + paxosMessage.proposalNumber);
-                    PaxosMessage reply = new PaxosMessage();
-                    if (paxosMessage.proposalNumber > highestProposalNumber) {
-                        reply.type = PaxosMessage.Type.Promise;
-                        reply.proposalNumber = lastAcceptNumber;
-                        reply.commit = lastAccept;
-                        lastPromise = paxosMessage.proposalNumber;
-                        System.out.println("Promise prepare");
-                    } else {
-                        reply.proposalNumber = paxosMessage.proposalNumber;
-                        reply.type = PaxosMessage.Type.RejectPrepare;
-                        System.out.println("Rejected prepare");
+                    if (!observerMode) {
+                        PaxosMessage reply = new PaxosMessage();
+                        if (paxosMessage.proposalNumber > highestProposalNumber) {
+                            reply.type = PaxosMessage.Type.Promise;
+                            reply.proposalNumber = lastAcceptNumber;
+                            reply.commit = lastAccept;
+                            lastPromise = paxosMessage.proposalNumber;
+                            System.out.println("Promise prepare");
+                        } else {
+                            reply.proposalNumber = paxosMessage.proposalNumber;
+                            reply.type = PaxosMessage.Type.RejectPrepare;
+                            System.out.println("Rejected prepare");
+                        }
+                        net.sendMessage(msg.replyAddress, msg.replyPort, paxosMessage.responseTitle, reply);
                     }
-                    net.sendMessage(msg.replyAddress, msg.replyPort, paxosMessage.responseTitle, reply);
                 } else if (paxosMessage.type == PaxosMessage.Type.AcceptRequest) {
                     System.out.println("Accept request received with proposal number " + paxosMessage.proposalNumber
                             + ", " + paxosMessage.commit.toString());
-                    PaxosMessage reply = new PaxosMessage();
-                    reply.proposalNumber = paxosMessage.proposalNumber;
-                    if (paxosMessage.proposalNumber >= lastPromise) {
-                        reply.type = PaxosMessage.Type.Accepted;
-                        reply.commit = paxosMessage.commit;
-                        lastAcceptNumber = paxosMessage.proposalNumber;
-                        lastAccept = paxosMessage.commit;
-                        System.out.println("Accepted accept request");
-                    } else {
-                        reply.type = PaxosMessage.Type.RejectAcceptRequest;
-                        System.out.println("Rejected accept request");
+                    if (!observerMode) {
+                        PaxosMessage reply = new PaxosMessage();
+                        reply.proposalNumber = paxosMessage.proposalNumber;
+                        if (paxosMessage.proposalNumber >= lastPromise) {
+                            reply.type = PaxosMessage.Type.Accepted;
+                            reply.commit = paxosMessage.commit;
+                            lastAcceptNumber = paxosMessage.proposalNumber;
+                            lastAccept = paxosMessage.commit;
+                            System.out.println("Accepted accept request");
+                        } else {
+                            reply.type = PaxosMessage.Type.RejectAcceptRequest;
+                            System.out.println("Rejected accept request");
+                        }
+                        net.sendMessage(msg.replyAddress, msg.replyPort, paxosMessage.responseTitle, reply);
+                        for (String s: serverList)
+                            net.sendMessage(s, "Paxos", reply);
                     }
-                    net.sendMessage(msg.replyAddress, msg.replyPort, paxosMessage.responseTitle, reply);
-                    for (String s: serverList)
-                        net.sendMessage(s, "Paxos", reply);
                 } else if (paxosMessage.type == PaxosMessage.Type.Accepted) {
                     System.out.println("One accept vote for proposal " + paxosMessage.proposalNumber);
                     if (!acceptedCounter.containsKey(paxosMessage.proposalNumber))
@@ -288,11 +391,13 @@ outerloop:
                             acceptedCounter.get(paxosMessage.proposalNumber) + 1);
                     if (acceptedCounter.get(paxosMessage.proposalNumber) * 2 >
                             serverList.size() && !paxosLearned.contains(paxosMessage.proposalNumber)) {
+                        finishOneRound = true;
                         paxosLock.lock();
                         System.out.println("Learning proposal " + paxosMessage.proposalNumber);
                         paxosLearned.add(paxosMessage.proposalNumber);
                         try {
-                            if (updateLog.size() == paxosMessage.commit.commitId) {
+                            if ((!observerMode && updateLog.size() == paxosMessage.commit.commitId)
+                                    || (observerMode && updateLog.get(updateLog.size() - 1).commitId < paxosMessage.commit.commitId)) {
                                 updateLog.add(paxosMessage.commit);
                                 System.out.println("Written to update log");
                             } else {
