@@ -17,14 +17,15 @@ public class LchServer {
     final Condition paxosCondition = paxosLock.newCondition();
 
     // serverList should include the address:port of the local server
-    public LchServer(int port, int serverId, List<String> serverList) {
+    public LchServer(int port, int serverId, List<String> serverList, boolean catchupMode) {
         this.serverId = serverId;
         this.serverList = serverList;
         highestProposalNumber = 0;
         net = new NetIO(port);
         updateLog = new ArrayList<Commit>();
         restoreState();
-        catchUp();
+        if (catchupMode)
+            catchUp();
 
         syncThread = new Thread(new SyncHandler());
         commitThread = new Thread(new CommitHandler());
@@ -42,8 +43,11 @@ public class LchServer {
         List<String> serverList = new ArrayList<String>();
         for (String s: args[2].split(","))
             serverList.add(s);
+        boolean catchupMode = true;
+        if (args.length >= 4 && args[3].equals("n"))
+            catchupMode = false;
 
-        LchServer server = new LchServer(port, serverId, serverList);
+        LchServer server = new LchServer(port, serverId, serverList, catchupMode);
         Scanner scan = new Scanner(System.in);
         System.out.println("Server started on port " + port);
         while (true) {
