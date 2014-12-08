@@ -42,7 +42,6 @@ public class LchServer {
         Scanner scan = new Scanner(System.in);
         System.out.println("Server started on port " + port);
         while (true) {
-            System.out.print("> ");
             System.out.flush();
             String s = scan.nextLine();
             if (s.equals("quit")) {
@@ -239,18 +238,23 @@ public class LchServer {
                 }
                 PaxosMessage paxosMessage = (PaxosMessage) msg.content;
                 if (paxosMessage.type == PaxosMessage.Type.Prepare) {
+                    System.out.println("Prepare received with proposal number " + paxosMessage.proposalNumber);
                     PaxosMessage reply = new PaxosMessage();
                     if (paxosMessage.proposalNumber > highestProposalNumber) {
                         reply.type = PaxosMessage.Type.Promise;
                         reply.proposalNumber = lastAcceptNumber;
                         reply.commit = lastAccept;
                         lastPromise = paxosMessage.proposalNumber;
+                        System.out.println("Promise prepare");
                     } else {
                         reply.proposalNumber = paxosMessage.proposalNumber;
                         reply.type = PaxosMessage.Type.RejectPrepare;
+                        System.out.println("Rejected prepare");
                     }
                     net.sendMessage(msg.replyAddress, msg.replyPort, paxosMessage.responseTitle, reply);
                 } else if (paxosMessage.type == PaxosMessage.Type.AcceptRequest) {
+                    System.out.println("Accept request received with proposal number " + paxosMessage.proposalNumber
+                            + ", " + paxosMessage.commit.toString());
                     PaxosMessage reply = new PaxosMessage();
                     reply.proposalNumber = paxosMessage.proposalNumber;
                     if (paxosMessage.proposalNumber >= lastPromise) {
@@ -258,13 +262,16 @@ public class LchServer {
                         reply.commit = paxosMessage.commit;
                         lastAcceptNumber = paxosMessage.proposalNumber;
                         lastAccept = paxosMessage.commit;
+                        System.out.println("Accepted accept request");
                     } else {
                         reply.type = PaxosMessage.Type.RejectAcceptRequest;
+                        System.out.println("Rejected accept request");
                     }
                     net.sendMessage(msg.replyAddress, msg.replyPort, paxosMessage.responseTitle, reply);
                     for (String s: serverList)
                         net.sendMessage(s, "Paxos", reply);
                 } else if (paxosMessage.type == PaxosMessage.Type.Accepted) {
+                    System.out.println("One accept vote for proposal " + paxosMessage.proposalNumber);
                     if (!acceptedCounter.containsKey(paxosMessage.proposalNumber))
                         acceptedCounter.put(paxosMessage.proposalNumber, 0);
                     acceptedCounter.put(paxosMessage.proposalNumber,
@@ -272,9 +279,14 @@ public class LchServer {
                     if (acceptedCounter.get(paxosMessage.proposalNumber) * 2 >
                             serverList.size()) {
                         paxosLock.lock();
+                        System.out.println("Learning proposal " + paxosMessage.proposalNumber);
                         try {
-                            if (updateLog.size() == paxosMessage.commit.commitId)
+                            if (updateLog.size() == paxosMessage.commit.commitId) {
                                 updateLog.add(paxosMessage.commit);
+                                System.out.println("Written to update log");
+                            } else {
+                                System.out.println("Not written to update log");
+                            }
                             lastAcceptNumber = -1;
                             lastAccept = null;
                             lastPaxosDecision = Math.max(lastPaxosDecision, paxosMessage.proposalNumber);
@@ -284,6 +296,7 @@ public class LchServer {
                         }
                     }
                 } else if (paxosMessage.type == PaxosMessage.Type.RejectAcceptRequest) {
+                    System.out.println("One reject vote for proposal " + paxosMessage.proposalNumber);
                     if (!rejectedCounter.containsKey(paxosMessage.proposalNumber))
                         rejectedCounter.put(paxosMessage.proposalNumber, 0);
                     rejectedCounter.put(paxosMessage.proposalNumber,
