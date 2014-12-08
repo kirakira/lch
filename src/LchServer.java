@@ -71,7 +71,7 @@ public class LchServer {
     private class SyncHandler implements Runnable {
         public void run() {
             while (!closing) {
-                Message msg = net.receiveMessage("Sync", 2 * NetIO.numNanosPerSecond);
+                Message msg = net.receiveMessage("SyncRequest", 2 * NetIO.numNanosPerSecond);
                 if (msg == null)
                     continue;
                 if (!(msg.content instanceof SyncRequest)) {
@@ -107,7 +107,7 @@ public class LchServer {
     private class CommitHandler implements Runnable {
         public void run() {
             while (!closing) {
-                Message msg = net.receiveMessage("Commit", 2 * NetIO.numNanosPerSecond);
+                Message msg = net.receiveMessage("CommitRequest", 2 * NetIO.numNanosPerSecond);
                 if (msg == null)
                     continue;
                 if (!(msg.content instanceof CommitRequest)) {
