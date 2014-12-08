@@ -95,7 +95,8 @@ public class LchClient {
 			ois.close();
 		} catch (IOException | ClassNotFoundException e) {
 			// TODO Auto-generated catch block
-			e.printStackTrace();
+			curFileDigests = new HashMap<String, String>();
+			//e.printStackTrace();
 		}
 		return curFileDigests;
 	}
@@ -169,6 +170,10 @@ public class LchClient {
 		HashMap<String, String> curFileDigests = (HashMap<String, String>) fileDigests.clone();
 
 		Commit commit = new Commit();
+		commit.author = System.getProperty("user.name");
+		if (commit.author == "")
+			commit.author = "anonymous";
+		commit.nanoTimestamp = System.nanoTime();
 		commit.commitId = version + 1;
 		commit.removedFiles.addAll((Set<String>) oldFileDigests.keySet());
 		commit.removedFiles.removeAll(curFileDigests.keySet());
@@ -180,6 +185,8 @@ public class LchClient {
 				Path path = Paths.get(tmpKey);
 				try {
 					commit.changedFiles.put(tmpKey, Files.readAllBytes(path));
+					byte [] bytes = Files.readAllBytes(path);
+					System.out.println();
 				} catch (IOException e) {
 					e.printStackTrace();
 				}
@@ -193,7 +200,7 @@ public class LchClient {
 		int numRetry = 0;
 		while (msg == null && (numRetry++) < maxNumRetry) {
 			Server server = pickRandomServer();
-			net.sendMessage(server.addr, server.port, "SyncRequest", commitReq);
+			net.sendMessage(server.addr, server.port, "CommitRequest", commitReq);
 			msg = net.receiveMessage(commitReq.responseTitle, NetIO.numNanosPerSecond * 10);
 		}
 		if (msg == null) {
@@ -203,6 +210,9 @@ public class LchClient {
 		CommitResponse commitRes = (CommitResponse) msg.content;
 		if (!commitRes.accepted) {
 			System.out.println(commitRes.comment);
+		} else {
+			version ++;
+			fileHashToFile();
 		}
 		return commitRes.accepted;
 	}
@@ -224,6 +234,7 @@ public class LchClient {
 	
 	public static void main (String [] args) {
 		// For test
+//		System.out.println(System.getProperty("user.name"));
 //		fileDigests = new TreeMap<String, String>();
 //		hashFiles(".");
 //		fileHashToFile();
