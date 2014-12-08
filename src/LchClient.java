@@ -2,13 +2,7 @@ import java.io.*;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Iterator;
-import java.util.Random;
-import java.util.Set;
-import java.util.TreeMap;
-import java.util.Vector;
+import java.util.*;
 
 class Server {
 	public String addr;
@@ -135,6 +129,12 @@ public class LchClient {
 		return HashUtils.genMD5(new String(Long.toString(seed)));
 	}
 	
+	public class commitComparator implements Comparator<Commit> {
+		public int compare(Commit c1, Commit c2) {
+			return c1.commitId - c2.commitId;
+		}
+	}
+	
 	private boolean doSync(Command cmd) {
 		System.out.println("doSync");
 		SyncRequest syncReq = new SyncRequest();
@@ -151,6 +151,9 @@ public class LchClient {
 			return false;
 		}
 		SyncResponse syncRes = (SyncResponse) msg.content;
+		List<Commit> commits = syncRes.commits;
+		Collections.sort(commits, new commitComparator());
+		
 		return true;
 	}
 	
@@ -200,7 +203,6 @@ public class LchClient {
 		CommitResponse commitRes = (CommitResponse) msg.content;
 		if (!commitRes.accepted) {
 			System.out.println(commitRes.comment);
-			return false;
 		}
 		return commitRes.accepted;
 	}
