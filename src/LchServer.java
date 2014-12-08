@@ -116,6 +116,8 @@ public class LchServer {
                 }
                 CommitRequest req = (CommitRequest) msg.content;
 
+                System.out.println("Received commit request: " + req.toString());
+
                 int proposalNumber = selectProposeNumber();
                 PaxosMessage prepare = new PaxosMessage();
                 prepare.type = PaxosMessage.Type.Prepare;

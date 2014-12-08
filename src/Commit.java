@@ -31,4 +31,14 @@ public class Commit implements Serializable {
             && author.equals(x.author)
             && message.equals(x.message);
     }
+
+    public String toString() {
+        String ret = "commit id: " + commitId;
+        ret += ", changed files: " + changedFiles.size();
+        ret += ", removed files: " + removedFiles.size();
+        ret += ", timestamp: " + nanoTimestamp;
+        ret += ", author: " + author;
+        ret += ", message: " + message;
+        return ret;
+    }
 }
