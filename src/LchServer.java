@@ -40,7 +40,10 @@ public class LchServer {
 
         LchServer server = new LchServer(port, serverId, serverList);
         Scanner scan = new Scanner(System.in);
+        System.out.println("Server started on port " + port);
         while (true) {
+            System.out.print("> ");
+            System.out.flush();
             String s = scan.nextLine();
             if (s.equals("quit")) {
                 server.close();
@@ -64,6 +67,7 @@ public class LchServer {
             syncThread.join();
             commitThread.join();
             acceptorLearnerThread.join();
+            net.close();
         } catch (InterruptedException e) {
         }
     }
@@ -81,12 +85,18 @@ public class LchServer {
                 SyncRequest req = (SyncRequest) msg.content;
                 req.baseCommit = Math.max(0, req.baseCommit);
 
+                System.out.println("Received a sync request: " + req.toString());
+
                 SyncResponse response = new SyncResponse();
                 response.commits = new ArrayList<Commit>();
                 paxosLock.lock();
                 try {
-                    for (int i = req.baseCommit + 1; i < updateLog.size(); ++i)
+                    int cnt = 0;
+                    for (int i = req.baseCommit + 1; i < updateLog.size(); ++i) {
                         response.commits.add(updateLog.get(i));
+                        ++cnt;
+                    }
+                    System.out.println("returned " + cnt + " updates");
                 } finally {
                     paxosLock.unlock();
                 }
@@ -174,10 +184,9 @@ public class LchServer {
                         reply.accepted = false;
                         reply.comment = "Paxos round timed out";
                         net.sendMessage(msg.replyAddress, msg.replyPort, req.responseTitle, reply);
+                        System.out.println("commit rejected due to paxos failure");
                         continue;
                     }
-                    System.out.println("update log size: " + updateLog.size());
-                    System.out.println("most recent commit: " + updateLog.get(updateLog.size() - 1).toString());
                     if (updateLog.size() > req.proposedCommit.commitId
                             && req.proposedCommit.commitId >= 0
                             && updateLog.get(req.proposedCommit.commitId).equals(req.proposedCommit)) {
@@ -185,12 +194,14 @@ public class LchServer {
                         reply.accepted = true;
                         reply.comment = "";
                         net.sendMessage(msg.replyAddress, msg.replyPort, req.responseTitle, reply);
+                        System.out.println("commit accepted");
                         continue;
                     } else {
                         CommitResponse reply = new CommitResponse();
                         reply.accepted = false;
                         reply.comment = "Please sync";
                         net.sendMessage(msg.replyAddress, msg.replyPort, req.responseTitle, reply);
+                        System.out.println("commit rejcted due to out of date repo");
                         continue;
                     }
                 } finally {

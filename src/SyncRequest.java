@@ -5,4 +5,8 @@ public class SyncRequest implements Serializable {
 
     public String responseTitle;
     public int baseCommit;
+
+    public String toString() {
+        return "base commit: " + baseCommit;
+    }
 }
