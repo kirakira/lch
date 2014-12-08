@@ -72,7 +72,7 @@ public class LchClient {
 	
 	private static void fileHashToFile() {
 		try {
-			FileOutputStream fos = new FileOutputStream(fileMetadataFile);
+			FileOutputStream fos = new FileOutputStream(fileMetadataFile, false);
 			ObjectOutputStream oos = new ObjectOutputStream(fos);
 			oos.writeInt(version);
 			oos.writeObject(fileDigests);
@@ -89,8 +89,7 @@ public class LchClient {
 			FileInputStream fis;
 			fis = new FileInputStream(fileMetadataFile);
 			ObjectInputStream ois = new ObjectInputStream(fis);
-			//int tmpVersion = 
-			ois.readInt();
+			version = ois.readInt();
 			curFileDigests = (HashMap<String, String>) ois.readObject();
 			ois.close();
 		} catch (IOException | ClassNotFoundException e) {
@@ -181,7 +180,7 @@ public class LchClient {
 		Iterator<String> it = curFileDigests.keySet().iterator();
 		while (it.hasNext()) {
 			String tmpKey = it.next();
-			if (oldFileDigests.get(tmpKey) != curFileDigests.get(tmpKey)) {
+			if (!curFileDigests.get(tmpKey).equals(oldFileDigests.get(tmpKey))) {
 				Path path = Paths.get(tmpKey);
 				try {
 					commit.changedFiles.put(tmpKey, Files.readAllBytes(path));
