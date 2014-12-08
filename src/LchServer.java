@@ -227,6 +227,7 @@ public class LchServer {
             Commit lastAccept = null;
             Map<Integer, Integer> acceptedCounter = new HashMap<Integer, Integer>(),
                 rejectedCounter = new HashMap<Integer, Integer>();
+            Set<Integer> learned = new HashSet<Integer>();
 
             while (!closing) {
                 Message msg = net.receiveMessage("Paxos", 2 * NetIO.numNanosPerSecond);
@@ -277,9 +278,10 @@ public class LchServer {
                     acceptedCounter.put(paxosMessage.proposalNumber,
                             acceptedCounter.get(paxosMessage.proposalNumber) + 1);
                     if (acceptedCounter.get(paxosMessage.proposalNumber) * 2 >
-                            serverList.size()) {
+                            serverList.size() && !learned.contains(paxosMessage.proposalNumber)) {
                         paxosLock.lock();
                         System.out.println("Learning proposal " + paxosMessage.proposalNumber);
+                        learned.add(paxosMessage.proposalNumber);
                         try {
                             if (updateLog.size() == paxosMessage.commit.commitId) {
                                 updateLog.add(paxosMessage.commit);
