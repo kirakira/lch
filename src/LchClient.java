@@ -174,7 +174,10 @@ public class LchClient {
 		for(int i = 0; i < commits.size(); ++i) {
 			syncOneCommit( fileDigests, commits.get(i) );
 		}
-		System.out.println("Successfully committed to version" + commits.get(commits.size()-1).commitId );
+		if( commits.size()==0 )
+			System.out.println("No updated files, Sync Finished");
+		else
+			System.out.println("Successfully sync to version" + commits.get(commits.size()-1).commitId );
 		return true;
 	}
 	
