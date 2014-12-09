@@ -16,11 +16,11 @@ class Server {
 
 public class LchClient {
 	// Meta data
-	private final static String lchDir = ".lch/";
+	private final String lchDir = ".lch/";
 	private final String serverListFile = lchDir + "servers";
-	private static final String fileMetadataFile = lchDir + "metadata";
-	private static HashMap<String, String> fileDigests;
-	private static int version = 0;
+	private final String fileMetadataFile = lchDir + "metadata";
+	private HashMap<String, String> fileDigests;
+	private int version = 0;
 	
 	// <IP, Port>
 	private Vector<Server> serverList;
@@ -52,7 +52,7 @@ public class LchClient {
 		return true;
 	}
 
-	private static void hashFiles(String fileStr) {
+	private void hashFiles(String fileStr) {
 		// ignore file or directory that starts with "."
 		if (fileStr.startsWith("./."))
 			return;
@@ -71,9 +71,10 @@ public class LchClient {
 		}
 	}
 	
-	private static void fileHashToFile() {
+	private void fileHashToFile() {
 		try {
-			FileOutputStream fos = new FileOutputStream(fileMetadataFile);
+			// overwrite metadata file
+			FileOutputStream fos = new FileOutputStream(fileMetadataFile, false);
 			ObjectOutputStream oos = new ObjectOutputStream(fos);
 			oos.writeInt(version);
 			oos.writeObject(fileDigests);
@@ -84,18 +85,16 @@ public class LchClient {
 	}
 	
 	@SuppressWarnings("unchecked")
-	private static HashMap<String, String> fileHashFromFile() {
+	private HashMap<String, String> fileHashFromFile() {
 		HashMap<String, String> curFileDigests = null;
 		try {
 			FileInputStream fis;
 			fis = new FileInputStream(fileMetadataFile);
 			ObjectInputStream ois = new ObjectInputStream(fis);
-			//int tmpVersion = 
-			ois.readInt();
+			version = ois.readInt();
 			curFileDigests = (HashMap<String, String>) ois.readObject();
 			ois.close();
 		} catch (IOException | ClassNotFoundException e) {
-			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
 		return curFileDigests;
@@ -245,7 +244,7 @@ public class LchClient {
 	}
 
 	private boolean doCommit(Command cmd) {
-		System.out.println("doCommit");
+		//System.out.println("doCommit");
 		CommitRequest commitReq = new CommitRequest();
 		commitReq.responseTitle = genRandomString();
 		
@@ -256,14 +255,18 @@ public class LchClient {
 		HashMap<String, String> curFileDigests = (HashMap<String, String>) fileDigests.clone();
 
 		Commit commit = new Commit();
+		commit.author = System.getProperty("user.name");
+		if (commit.author.equals(""))
+			commit.author = "anonymous";
+		commit.message = cmd.getMsg();
 		commit.commitId = version + 1;
-		commit.removedFiles.addAll((Set<String>) oldFileDigests.keySet());
+		commit.removedFiles.addAll(oldFileDigests.keySet());
 		commit.removedFiles.removeAll(curFileDigests.keySet());
 
 		Iterator<String> it = curFileDigests.keySet().iterator();
 		while (it.hasNext()) {
 			String tmpKey = it.next();
-			if (oldFileDigests.get(tmpKey) != curFileDigests.get(tmpKey)) {
+			if (!curFileDigests.get(tmpKey).equals(oldFileDigests.get(tmpKey))) {
 				Path path = Paths.get(tmpKey);
 				try {
 					commit.changedFiles.put(tmpKey, Files.readAllBytes(path));
@@ -280,8 +283,13 @@ public class LchClient {
 		int numRetry = 0;
 		while (msg == null && (numRetry++) < maxNumRetry) {
 			Server server = pickRandomServer();
-			net.sendMessage(server.addr, server.port, "SyncRequest", commitReq);
+			System.out.print("Commit#" + version+1 + " Try to connect " + server.addr + ":" + server.port);
+			net.sendMessage(server.addr, server.port, "CommitRequest", commitReq);
 			msg = net.receiveMessage(commitReq.responseTitle, NetIO.numNanosPerSecond * 10);
+			if (msg == null)
+				System.out.println("...Failed");
+			else
+				System.out.println("...Success");
 		}
 		if (msg == null) {
 			System.err.println("Network is unstable");
@@ -289,7 +297,11 @@ public class LchClient {
 		}
 		CommitResponse commitRes = (CommitResponse) msg.content;
 		if (!commitRes.accepted) {
-			System.out.println(commitRes.comment);
+			System.out.println("COMMIT FAILED Comments: " + commitRes.comment);
+		} else {
+			version ++;
+			fileHashToFile();
+			System.out.println("COMMIT SUCCESS");
 		}
 		return commitRes.accepted;
 	}
@@ -302,30 +314,17 @@ public class LchClient {
 		case "commit":
 			doCommit(cmd);
 			break;
-
 		default:
 			break;
 		}		
 	}
 	
-	
 	public static void main (String [] args) {
-		// For test
-//		fileDigests = new TreeMap<String, String>();
-//		hashFiles(".");
-//		fileHashToFile();
-//		TreeMap<String, String> fileHashs = fileHashFromFile();
-//		System.out.println(fileHashs);
-//		System.exit(1);		
-//		System.out.println(args.length);
-		
 		Command cmd = CommandLineParser.parse(args);
 		if (cmd == null) {
 			CommandLineParser.printHelp();
 			System.exit(1);
 		}
-		//System.out.println("CMD: " + cmd.getCmd() + ", FILE: " + cmd.getFileName());
-		//System.exit(0);
 		
 		LchClient lchClient = new LchClient();
 		if (!lchClient.init()) {
