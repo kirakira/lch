@@ -96,7 +96,6 @@ public class LchClient {
 			ois.close();
 		} catch (IOException | ClassNotFoundException e) {
 			curFileDigests = new HashMap<String, String> ();
-			e.printStackTrace();
 		}
 		return curFileDigests;
 	}
