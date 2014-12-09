@@ -2,10 +2,12 @@
 public class Command {
 	private String cmd;
 	private String fileName;
+	private String msg;
 	
-	public Command(String cmd, String fileName) {
+	public Command(String cmd) {
 		this.cmd = cmd;
-		this.fileName = fileName;
+		this.fileName = null;
+		this.setMsg("");
 	}
 	
 	public String getCmd() {
@@ -22,5 +24,17 @@ public class Command {
 	
 	public void setFileName(String fileName) {
 		this.fileName = fileName;
+	}
+
+	public String getMsg() {
+		return msg;
+	}
+
+	public void setMsg(String msg) {
+		this.msg = msg;
+	}
+	
+	public String toString() {
+		return "CMD: " + cmd + " MSG: " + msg + " FILE: " + fileName;
 	}
 }
