@@ -13,6 +13,8 @@ public class LchServer {
     private int lastPaxosDecision = -1;
     private volatile Set<Integer> paxosLearned = new HashSet<Integer>();
 
+    private boolean verbose = false;
+
     final Lock paxosLock = new ReentrantLock();
     final Condition paxosCondition = paxosLock.newCondition();
 
@@ -196,6 +198,11 @@ public class LchServer {
             }
         }
     }
+    
+    private void logPaxos(String s) {
+        if (verbose)
+            System.out.println(s);
+    }
 
     private static class UpdateLogRequest implements Serializable {
         static final long serialVersionUID = 8306525401762584161L;
@@ -237,12 +244,14 @@ public class LchServer {
         }
     }
 
-    private String randomTitle() {
-        Random rand = new Random();
+    private Random rand = new Random();
+    public String randomTitle() {
         StringBuilder sb = new StringBuilder();
         String alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
-        for (int i = 0; i < 20; ++i)
-            sb.append(alphabet.charAt(rand.nextInt(alphabet.length())));
+        synchronized (rand) {
+            for (int i = 0; i < 20; ++i)
+                sb.append(alphabet.charAt(rand.nextInt(alphabet.length())));
+        }
         return sb.toString();
     }
 
@@ -271,14 +280,15 @@ outerloop:
                 int promise = 0, rejectPrepare = 0;
                 Commit commit = null;
                 int highestCommit = -1;
-                while (promise * 2 <= serverList.size() && rejectPrepare * 2 <= serverList.size()) {
+                while (promise * 2 <= serverList.size() && rejectPrepare * 2 < serverList.size()) {
                     Message prepareReplyMessage = net.receiveMessage(prepare.responseTitle, 10 * NetIO.numNanosPerSecond);
                     if (prepareReplyMessage == null) {
                         CommitResponse reply = new CommitResponse();
                         reply.accepted = false;
                         reply.comment = "Paxos prepare timed out";
                         net.sendMessage(msg.replyAddress, msg.replyPort, req.responseTitle, reply);
-                        System.out.println("Prepare timed out");
+                        System.err.println("Prepare timed out, received " + promise + " promises and "
+                                + rejectPrepare + " rejects so far");
                         continue outerloop;
                     }
                     if (!(prepareReplyMessage.content instanceof PaxosMessage))
@@ -320,14 +330,6 @@ outerloop:
                             timeout = paxosCondition.awaitNanos(timeout);
                     } catch (InterruptedException e) {
                     }
-                    if (timeout <= 0) {
-                        CommitResponse reply = new CommitResponse();
-                        reply.accepted = false;
-                        reply.comment = "Paxos round timed out";
-                        net.sendMessage(msg.replyAddress, msg.replyPort, req.responseTitle, reply);
-                        System.out.println("commit rejected due to paxos failure");
-                        continue;
-                    }
                     if (updateLog.size() > req.proposedCommit.commitId
                             && req.proposedCommit.commitId >= 0
                             && updateLog.get(req.proposedCommit.commitId).equals(req.proposedCommit)) {
@@ -340,9 +342,14 @@ outerloop:
                     } else {
                         CommitResponse reply = new CommitResponse();
                         reply.accepted = false;
-                        reply.comment = "Please sync";
+                        if (timeout <= 0) {
+                            reply.comment = "Paxos round timed out";
+                            System.out.println("commit rejected due to paxos failure");
+                        } else {
+                            reply.comment = "Please sync";
+                            System.out.println("commit rejcted due to out of date repo");
+                        }
                         net.sendMessage(msg.replyAddress, msg.replyPort, req.responseTitle, reply);
-                        System.out.println("commit rejcted due to out of date repo");
                         continue;
                     }
                 } finally {
@@ -387,7 +394,7 @@ outerloop:
                 }
                 PaxosMessage paxosMessage = (PaxosMessage) msg.content;
                 if (paxosMessage.type == PaxosMessage.Type.Prepare) {
-                    System.out.println("Prepare received with proposal number " + paxosMessage.proposalNumber);
+                    logPaxos("Prepare received with proposal number " + paxosMessage.proposalNumber);
                     if (!observerMode) {
                         PaxosMessage reply = new PaxosMessage();
                         if (paxosMessage.proposalNumber > highestProposalNumber) {
@@ -395,16 +402,16 @@ outerloop:
                             reply.proposalNumber = lastAcceptNumber;
                             reply.commit = lastAccept;
                             lastPromise = paxosMessage.proposalNumber;
-                            System.out.println("Promise prepare");
+                            logPaxos("Promise prepare");
                         } else {
                             reply.proposalNumber = paxosMessage.proposalNumber;
                             reply.type = PaxosMessage.Type.RejectPrepare;
-                            System.out.println("Rejected prepare");
+                            logPaxos("Rejected prepare");
                         }
                         net.sendMessage(msg.replyAddress, msg.replyPort, paxosMessage.responseTitle, reply);
                     }
                 } else if (paxosMessage.type == PaxosMessage.Type.AcceptRequest) {
-                    System.out.println("Accept request received with proposal number " + paxosMessage.proposalNumber
+                    logPaxos("Accept request received with proposal number " + paxosMessage.proposalNumber
                             + ", " + paxosMessage.commit.toString());
                     if (!observerMode) {
                         PaxosMessage reply = new PaxosMessage();
@@ -414,17 +421,17 @@ outerloop:
                             reply.commit = paxosMessage.commit;
                             lastAcceptNumber = paxosMessage.proposalNumber;
                             lastAccept = paxosMessage.commit;
-                            System.out.println("Accepted accept request");
+                            logPaxos("Accepted accept request");
                         } else {
                             reply.type = PaxosMessage.Type.RejectAcceptRequest;
-                            System.out.println("Rejected accept request");
+                            logPaxos("Rejected accept request");
                         }
                         net.sendMessage(msg.replyAddress, msg.replyPort, paxosMessage.responseTitle, reply);
                         for (String s: serverList)
                             net.sendMessage(s, "Paxos", reply);
                     }
                 } else if (paxosMessage.type == PaxosMessage.Type.Accepted) {
-                    System.out.println("One accept vote for proposal " + paxosMessage.proposalNumber);
+                    logPaxos("One accept vote for proposal " + paxosMessage.proposalNumber);
                     if (!acceptedCounter.containsKey(paxosMessage.proposalNumber))
                         acceptedCounter.put(paxosMessage.proposalNumber, 0);
                     acceptedCounter.put(paxosMessage.proposalNumber,
@@ -433,15 +440,15 @@ outerloop:
                             serverList.size() && !paxosLearned.contains(paxosMessage.proposalNumber)) {
                         finishOneRound = true;
                         paxosLock.lock();
-                        System.out.println("Learning proposal " + paxosMessage.proposalNumber);
+                        logPaxos("Learning proposal " + paxosMessage.proposalNumber);
                         paxosLearned.add(paxosMessage.proposalNumber);
                         try {
                             if ((!observerMode && updateLog.size() == paxosMessage.commit.commitId)
                                     || (observerMode && updateLog.get(updateLog.size() - 1).commitId < paxosMessage.commit.commitId)) {
                                 updateLog.add(paxosMessage.commit);
-                                System.out.println("Written to update log");
+                                logPaxos("Written to update log");
                             } else {
-                                System.out.println("Not written to update log");
+                                logPaxos("Not written to update log");
                             }
                             lastAcceptNumber = -1;
                             lastAccept = null;
@@ -452,7 +459,7 @@ outerloop:
                         }
                     }
                 } else if (paxosMessage.type == PaxosMessage.Type.RejectAcceptRequest) {
-                    System.out.println("One reject vote for proposal " + paxosMessage.proposalNumber);
+                    logPaxos("One reject vote for proposal " + paxosMessage.proposalNumber);
                     if (!rejectedCounter.containsKey(paxosMessage.proposalNumber))
                         rejectedCounter.put(paxosMessage.proposalNumber, 0);
                     rejectedCounter.put(paxosMessage.proposalNumber,
