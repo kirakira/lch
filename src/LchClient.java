@@ -254,16 +254,10 @@ public class LchClient {
 			}
 		}
 		for(String filename : commit.changedFiles.keySet()) {
-			// if this file not exist in hashmap, conflict
-			if( !copyFileDigests.containsKey( filename )) {
-				reportConflict( filename );
-				return true;
-			}
 			Path path = Paths.get(filename);
 			// if this file not exist in file system, conflict
 			if( !Files.exists(path) ) {
-				reportConflict( filename );
-				return true;
+				continue;
 			}
 			// if change of file, then conflict
 			try {
