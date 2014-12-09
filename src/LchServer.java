@@ -480,6 +480,7 @@ outerloop:
                             if ((!observerMode && updateLog.size() == paxosMessage.commit.commitId)
                                     || (observerMode && updateLog.get(updateLog.size() - 1).commitId < paxosMessage.commit.commitId)) {
                                 updateLog.add(paxosMessage.commit);
+                                saveState();
                                 logPaxos("Written to update log");
                             } else {
                                 logPaxos("Not written to update log");
