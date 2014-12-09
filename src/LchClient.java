@@ -141,6 +141,7 @@ public class LchClient {
 		SyncRequest syncReq = new SyncRequest();
 		syncReq.responseTitle = genRandomString();
 		syncReq.baseCommit = version;
+		System.out.println("Client: version" + version);
 		Message msg = null;
 		int numRetry = 0;
 		while (msg == null && (numRetry++) < maxNumRetry) {
@@ -192,7 +193,7 @@ public class LchClient {
 	private void syncOneCommit(HashMap<String, String> fileDigests2,
 			Commit commit) {
 		// remove these files
-		System.out.print("Client: Removed Size = " + commit.removedFiles.size() 
+		System.out.println("Client: Removed Size = " + commit.removedFiles.size() 
 							+ "Changed Size = " + commit.changedFiles.size() );		
 		for(String filename : commit.removedFiles) {
 			try {
