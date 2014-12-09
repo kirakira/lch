@@ -97,8 +97,9 @@ public class LchClient {
 		} catch (IOException | ClassNotFoundException e) {
 			version = 0;
 			curFileDigests = new HashMap<String, String>();
-			//e.printStackTrace();
+			e.printStackTrace();
 		}
+        System.out.println("Initial version: " + version);
 		return curFileDigests;
 	}
 	
@@ -138,6 +139,11 @@ public class LchClient {
 	
 	private boolean doSync(Command cmd) {
 		System.out.println("doSync");
+		// First, we copy current filename to hashValue mapping
+		HashMap<String, String> oldFileDigests = fileHashFromFile();
+		hashFiles(".");
+		@SuppressWarnings("unchecked")
+		HashMap<String, String> copyFileDigests = (HashMap<String, String>) fileDigests.clone();
 		SyncRequest syncReq = new SyncRequest();
 		syncReq.responseTitle = genRandomString();
 		syncReq.baseCommit = version;
@@ -158,11 +164,6 @@ public class LchClient {
 		Collections.sort(commits, new commitComparator());
 
 		// Check if a commit is in conflict
-		// First, we copy current filename to hashValue mapping
-		HashMap<String, String> oldFileDigests = fileHashFromFile();
-		hashFiles(".");
-		@SuppressWarnings("unchecked")
-		HashMap<String, String> copyFileDigests = (HashMap<String, String>) fileDigests.clone();
 		// We apply the hash of changed files to the value
 		for(int i = 0; i < commits.size(); ++i) {
 			if( isConflict( copyFileDigests, commits.get(i) ) ) {

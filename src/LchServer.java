@@ -69,6 +69,7 @@ public class LchServer {
         LchServer server = new LchServer(port, serverId, serverList, catchupMode, persist);
         Scanner scan = new Scanner(System.in);
         System.out.println("Server started on port " + port);
+        System.out.println("Serverlist contains " + serverList.size() + " entries");
         while (true) {
             System.out.flush();
             String s = scan.nextLine();
