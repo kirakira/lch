@@ -2,6 +2,7 @@ import java.io.*;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.nio.file.StandardOpenOption;
 import java.util.*;
 
 class Server {
@@ -72,7 +73,7 @@ public class LchClient {
 	
 	private static void fileHashToFile() {
 		try {
-			FileOutputStream fos = new FileOutputStream(fileMetadataFile, false);
+			FileOutputStream fos = new FileOutputStream(fileMetadataFile);
 			ObjectOutputStream oos = new ObjectOutputStream(fos);
 			oos.writeInt(version);
 			oos.writeObject(fileDigests);
@@ -89,17 +90,16 @@ public class LchClient {
 			FileInputStream fis;
 			fis = new FileInputStream(fileMetadataFile);
 			ObjectInputStream ois = new ObjectInputStream(fis);
-			version = ois.readInt();
+			//int tmpVersion = 
+			ois.readInt();
 			curFileDigests = (HashMap<String, String>) ois.readObject();
 			ois.close();
 		} catch (IOException | ClassNotFoundException e) {
 			// TODO Auto-generated catch block
-			curFileDigests = new HashMap<String, String>();
-			//e.printStackTrace();
+			e.printStackTrace();
 		}
 		return curFileDigests;
 	}
-	
 	
 	private String hashFile(String fileStr) {
 		return HashUtils.genSHA1(new File(fileStr));
@@ -153,12 +153,99 @@ public class LchClient {
 		SyncResponse syncRes = (SyncResponse) msg.content;
 		List<Commit> commits = syncRes.commits;
 		Collections.sort(commits, new commitComparator());
+
+		// Check if a commit is in conflict
+		// First, we copy current filename to hashValue mapping
+		HashMap<String, String> oldFileDigests = fileHashFromFile();
+		hashFiles(".");
+		@SuppressWarnings("unchecked")
+		HashMap<String, String> copyFileDigests = (HashMap<String, String>) fileDigests.clone();
+		// We apply the hash of changed files to the value
+		for(int i = 0; i < commits.size(); ++i) {
+			if( isConflict( copyFileDigests, commits.get(i) ) ) {
+				System.err.println("In conflict with version" 
+									+ commits.get(i).commitId + " Sync terminated" );
+				return false;
+			}
+		}
 		
+		// No conflict, apply each commit
+		for(int i = 0; i < commits.size(); ++i) {
+			syncOneCommit( fileDigests, commits.get(i) );
+		}
+		System.out.println("Successfully committed to version" + commits.get(commits.size()-1).commitId );
 		return true;
 	}
 	
+	/**
+	 * Apply the commit to current file system with change of hashvalue
+	 * @param fileDigests2
+	 * mapping from filename to content hash
+	 * @param commit
+	 * one commit
+	 */
+	private void syncOneCommit(HashMap<String, String> fileDigests2,
+			Commit commit) {
+		// remove these files
+		for(String filename : commit.removedFiles) {
+			try {
+				Path path = Paths.get(filename);
+				Files.deleteIfExists( path );
+				fileDigests2.remove( filename );
+			} catch (IOException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
+		}
+		// apply changed files into copyFileDigests
+		for(String filename : commit.changedFiles.keySet()) {
+			Path path = Paths.get(filename);
+			try {
+				Files.deleteIfExists( path );
+				Files.write(path, commit.changedFiles.get(filename),
+						StandardOpenOption.CREATE, StandardOpenOption.APPEND);
+				fileDigests2.put(filename, HashUtils.genSHA1(new String(commit.changedFiles.get(filename))) );
+			} catch (IOException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
+		}
+		
+		// maintain the version and metadatafile
+		version = commit.commitId;
+		fileHashToFile();
+	}
+
+	/**
+	 * Check if the commit is in conflict with the hash values of existed files
+	 * That equals to check if the removed & changed files exist in current version
+	 * @param copyFileDigests 
+	 * The mapping from filenames to hash value of file content
+	 * @commit
+	 * The commit
+	 * @return 
+	 * true if conflict, otherwise false
+	 */
+	private boolean isConflict(HashMap<String, String> copyFileDigests,
+			Commit commit) {
+		// check if all removed files exist in copyFileDigests
+		for(String filename : commit.removedFiles) {
+			if( !copyFileDigests.containsKey( filename ))
+				return true;
+		}
+		// remove these files
+		for(String filename : commit.removedFiles) {
+			copyFileDigests.remove( filename );
+		}
+		// apply changed files into copyFileDigests
+		for(String filename : commit.changedFiles.keySet()) {
+			copyFileDigests.put(filename, HashUtils.genSHA1(new String(commit.changedFiles.get(filename))) );
+		}
+		return false;
+	}
+
 	private boolean doCommit(Command cmd) {
-		//System.out.println("doCommit");
+		System.out.println("doCommit");
 		CommitRequest commitReq = new CommitRequest();
 		commitReq.responseTitle = genRandomString();
 		
@@ -169,18 +256,14 @@ public class LchClient {
 		HashMap<String, String> curFileDigests = (HashMap<String, String>) fileDigests.clone();
 
 		Commit commit = new Commit();
-		commit.author = System.getProperty("user.name");
-		if (commit.author == "")
-			commit.author = "anonymous";
-		commit.nanoTimestamp = System.nanoTime();
 		commit.commitId = version + 1;
-		commit.removedFiles.addAll(oldFileDigests.keySet());
+		commit.removedFiles.addAll((Set<String>) oldFileDigests.keySet());
 		commit.removedFiles.removeAll(curFileDigests.keySet());
 
 		Iterator<String> it = curFileDigests.keySet().iterator();
 		while (it.hasNext()) {
 			String tmpKey = it.next();
-			if (!curFileDigests.get(tmpKey).equals(oldFileDigests.get(tmpKey))) {
+			if (oldFileDigests.get(tmpKey) != curFileDigests.get(tmpKey)) {
 				Path path = Paths.get(tmpKey);
 				try {
 					commit.changedFiles.put(tmpKey, Files.readAllBytes(path));
@@ -197,13 +280,8 @@ public class LchClient {
 		int numRetry = 0;
 		while (msg == null && (numRetry++) < maxNumRetry) {
 			Server server = pickRandomServer();
-			System.out.print("Try to connect " + server.addr + ":" + server.port);
-			net.sendMessage(server.addr, server.port, "CommitRequest", commitReq);
+			net.sendMessage(server.addr, server.port, "SyncRequest", commitReq);
 			msg = net.receiveMessage(commitReq.responseTitle, NetIO.numNanosPerSecond * 10);
-			if (msg == null)
-				System.out.println("...Failed");
-			else 
-				System.out.println("...Success");
 		}
 		if (msg == null) {
 			System.err.println("Network is unstable");
@@ -211,11 +289,7 @@ public class LchClient {
 		}
 		CommitResponse commitRes = (CommitResponse) msg.content;
 		if (!commitRes.accepted) {
-			System.out.println("FAILED Comments: " + commitRes.comment);
-		} else {
-			version ++;
-			fileHashToFile();
-			System.out.println("SUCCESS");
+			System.out.println(commitRes.comment);
 		}
 		return commitRes.accepted;
 	}
@@ -237,7 +311,6 @@ public class LchClient {
 	
 	public static void main (String [] args) {
 		// For test
-//		System.out.println(System.getProperty("user.name"));
 //		fileDigests = new TreeMap<String, String>();
 //		hashFiles(".");
 //		fileHashToFile();
