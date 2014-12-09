@@ -95,7 +95,9 @@ public class LchClient {
 			curFileDigests = (HashMap<String, String>) ois.readObject();
 			ois.close();
 		} catch (IOException | ClassNotFoundException e) {
-			curFileDigests = new HashMap<String, String> ();
+			version = 0;
+			curFileDigests = new HashMap<String, String>();
+			//e.printStackTrace();
 		}
 		return curFileDigests;
 	}
@@ -229,18 +231,57 @@ public class LchClient {
 			Commit commit) {
 		// check if all removed files exist in copyFileDigests
 		for(String filename : commit.removedFiles) {
-			if( !copyFileDigests.containsKey( filename ))
+			// if this file not exist in hashmap, conflict
+			if( !copyFileDigests.containsKey( filename )) {
+				reportConflict( filename );
 				return true;
+			}
+			Path path = Paths.get(filename);
+			// if this file not exist in file system, conflict
+			if( !Files.exists(path) ) {
+				reportConflict( filename );
+				return true;
+			}
+			// if change of file, then conflict
+			try {
+				String curHashContent = HashUtils.genSHA1(new String(Files.readAllBytes(path)));
+				if( !curHashContent.equals(copyFileDigests.get(filename)) ) {
+					reportConflict( filename );
+					return true;
+				}
+			} catch (IOException e) {
+				e.printStackTrace();
+			}
 		}
-		// remove these files
-		for(String filename : commit.removedFiles) {
-			copyFileDigests.remove( filename );
-		}
-		// apply changed files into copyFileDigests
 		for(String filename : commit.changedFiles.keySet()) {
-			copyFileDigests.put(filename, HashUtils.genSHA1(new String(commit.changedFiles.get(filename))) );
+			// if this file not exist in hashmap, conflict
+			if( !copyFileDigests.containsKey( filename )) {
+				reportConflict( filename );
+				return true;
+			}
+			Path path = Paths.get(filename);
+			// if this file not exist in file system, conflict
+			if( !Files.exists(path) ) {
+				reportConflict( filename );
+				return true;
+			}
+			// if change of file, then conflict
+			try {
+				String curHashContent = HashUtils.genSHA1(new String(Files.readAllBytes(path)));
+				if( !curHashContent.equals(copyFileDigests.get(filename)) ) {
+					reportConflict( filename );
+					return true;
+				}
+			} catch (IOException e) {
+				e.printStackTrace();
+			}
 		}
 		return false;
+	}
+
+	private void reportConflict(String filename) {
+		// TODO Auto-generated method stub
+		System.err.println("Conflict " + filename);
 	}
 
 	private boolean doCommit(Command cmd) {
