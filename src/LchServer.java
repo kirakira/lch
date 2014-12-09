@@ -12,6 +12,7 @@ public class LchServer {
     private volatile List<String> serverList;
     private int lastPaxosDecision = -1;
     private volatile Set<Integer> paxosLearned = new HashSet<Integer>();
+    private volatile String persistFile;
 
     private boolean verbose = false;
 
@@ -19,9 +20,10 @@ public class LchServer {
     final Condition paxosCondition = paxosLock.newCondition();
 
     // serverList should include the address:port of the local server
-    public LchServer(int port, int serverId, List<String> serverList, boolean catchupMode) {
+    public LchServer(int port, int serverId, List<String> serverList, boolean catchupMode, String persistFile) {
         this.serverId = serverId;
         this.serverList = serverList;
+        this.persistFile = persistFile;
         highestProposalNumber = 0;
         net = new NetIO(port);
         updateLog = new ArrayList<Commit>();
@@ -48,7 +50,7 @@ public class LchServer {
 
     public static final void main(String[] args) {
         if (args.length < 3) {
-            System.out.println("Usage: java LchServer port serverId serverList [n]");
+            System.out.println("Usage: java LchServer port serverId serverList [n] [persist file]");
             return;
         }
 
@@ -60,8 +62,11 @@ public class LchServer {
         boolean catchupMode = true;
         if (args.length >= 4 && args[3].equals("n"))
             catchupMode = false;
+        String persist = null;
+        if (args.length >= 5)
+            persist = args[4];
 
-        LchServer server = new LchServer(port, serverId, serverList, catchupMode);
+        LchServer server = new LchServer(port, serverId, serverList, catchupMode, persist);
         Scanner scan = new Scanner(System.in);
         System.out.println("Server started on port " + port);
         while (true) {
@@ -76,10 +81,39 @@ public class LchServer {
         }
     }
 
+    @SuppressWarnings("unchecked")
     private void restoreState() {
         paxosLock.lock();
         try {
             updateLog.add(new Commit());
+            if (persistFile != null) {
+                FileInputStream in = new FileInputStream(persistFile);
+                ObjectInputStream oin = new ObjectInputStream(in);
+                updateLog = (List<Commit>) oin.readObject();
+
+                oin.close();
+            }
+        } catch (FileNotFoundException e) {
+        } catch (IOException e) {
+        } catch (ClassNotFoundException e) {
+        } finally {
+            paxosLock.unlock();
+        }
+    }
+
+    private void saveState() {
+        paxosLock.lock();
+        try {
+            if (persistFile != null) {
+                FileOutputStream out = new FileOutputStream(persistFile);
+                ObjectOutputStream oout = new ObjectOutputStream(out);
+
+                oout.writeObject(updateLog);
+                oout.flush();
+                oout.close();
+            }
+        } catch (FileNotFoundException e) {
+        } catch (IOException e) {
         } finally {
             paxosLock.unlock();
         }

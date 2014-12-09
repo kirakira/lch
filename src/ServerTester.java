@@ -15,7 +15,7 @@ public class ServerTester {
         for (int i = 0; i < n; ++i)
             serverList.add("localhost:" + (basePort + i));
         for (int i = 0; i < n; ++i)
-            servers[i] = new LchServer(basePort + i, i, serverList, false);
+            servers[i] = new LchServer(basePort + i, i, serverList, false, null);
         for (int i = 0; i < n; ++i)
             clients[i] = new NetIO(basePort + i + n);
 
