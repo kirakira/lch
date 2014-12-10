@@ -140,8 +140,8 @@ public class LchClient {
 	private boolean doSync(Command cmd) {
 		System.out.println("doSync");
 		// First, we copy current filename to hashValue mapping
-		HashMap<String, String> oldFileDigests = fileHashFromFile();
-		hashFiles(".");
+		fileDigests = fileHashFromFile();
+		//hashFiles(".");
 		@SuppressWarnings("unchecked")
 		HashMap<String, String> copyFileDigests = (HashMap<String, String>) fileDigests.clone();
 		SyncRequest syncReq = new SyncRequest();
