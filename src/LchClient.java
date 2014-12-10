@@ -175,7 +175,7 @@ public class LchClient {
 		if( isConflict( copyFileDigests, commits.get(0) ) ) {
 				System.err.println("In conflict with version" 
 									+ commits.get(0).commitId + " Sync finished" );
-				//version = commits.get(commits.size()-1).commitId;
+				version = commits.get(0).commitId;
 				return false;
 		}
 		
@@ -283,10 +283,10 @@ public class LchClient {
 			}
 			Path path = Paths.get(filename);
 			// if this file not exist in file system, conflict
-			if( !Files.exists(path) ) {
-				reportConflict( filename, 1, emptyArray );
-				ifConflict = true;
-			}
+			//if( !Files.exists(path) ) {
+			//	reportConflict( filename, 1, emptyArray );
+			//	ifConflict = true;
+			//}
 			// if change of file, then conflict
 			try {
 				String curHashContent = HashUtils.genSHA1(new String(Files.readAllBytes(path)));
@@ -302,12 +302,15 @@ public class LchClient {
 			Path path = Paths.get(filename);
 			// if this file not exist in file system, conflict
 			if( !Files.exists(path) ) {
+				reportConflict( filename, 0, commit.changedFiles.get(filename) );
+				ifConflict = true;
 				continue;
 			}
 			// if change of file, then conflict
 			try {
 				String curHashContent = HashUtils.genSHA1(new String(Files.readAllBytes(path)));
-				if( !curHashContent.equals(copyFileDigests.get(filename)) ) {
+				if( !curHashContent.equals(copyFileDigests.get(filename)) 
+						&& !curHashContent.equals(commit.changedFiles.get(filename)) ) {
 					reportConflict( filename, 0, commit.changedFiles.get(filename) );
 					ifConflict = true;
 				}
