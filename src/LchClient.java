@@ -162,14 +162,19 @@ public class LchClient {
 		List<Commit> commits = syncRes.commits;
 		Collections.sort(commits, new commitComparator());
 
+		if( commits.size()==0 )
+			System.out.println("No updated files, Sync Finished");
 		// Check if a commit is in conflict
+		// merge all commits
+		for(int i = 1; i < commits.size(); ++i)
+			mergeCommits( commits.get(0), commits.get(i) );
+		
 		// We apply the hash of changed files to the value
-		for(int i = 0; i < commits.size(); ++i) {
-			if( isConflict( copyFileDigests, commits.get(i) ) ) {
+		if( isConflict( copyFileDigests, commits.get(0) ) ) {
 				System.err.println("In conflict with version" 
-									+ commits.get(i).commitId + " Sync terminated" );
+									+ commits.get(0).commitId + " Sync finished" );
+				//version = commits.get(commits.size()-1).commitId;
 				return false;
-			}
 		}
 		
 		// No conflict, apply each commit
@@ -186,13 +191,32 @@ public class LchClient {
 //		}
 //		System.out.println("}");
 		
-		if( commits.size()==0 )
-			System.out.println("No updated files, Sync Finished");
-		else
-			System.out.println("Successfully sync to version" + commits.get(commits.size()-1).commitId );
+		System.out.println("Successfully sync to version" + commits.get(commits.size()-1).commitId );
 		return true;
 	}
 	
+	/**
+	 * merge two commits, follow the order of A to B,
+	 * merge results are in A
+	 * @param commitA
+	 * @param commitB
+	 */
+	private void mergeCommits(Commit commitA, Commit commitB) {
+		commitA.commitId = commitB.commitId;
+		for(String filename: commitB.removedFiles) {
+			if( commitA.changedFiles.containsKey(filename) ) {
+				commitA.changedFiles.remove( filename );
+			}
+			commitA.removedFiles.add( filename );
+		}
+		for(String filename: commitB.changedFiles.keySet()) {
+			if( commitA.removedFiles.contains(filename) ) {
+				commitA.removedFiles.remove(filename);
+			}
+			commitA.changedFiles.put(filename, commitB.changedFiles.get(filename));
+		}
+	}
+
 	/**
 	 * Apply the commit to current file system with change of hashvalue
 	 * @param fileDigests2
@@ -246,25 +270,27 @@ public class LchClient {
 	 */
 	private boolean isConflict(HashMap<String, String> copyFileDigests,
 			Commit commit) {
+		boolean ifConflict = false;
+		byte[] emptyArray = {};
 		// check if all removed files exist in copyFileDigests
 		for(String filename : commit.removedFiles) {
 			// if this file not exist in hashmap, conflict
 			if( !copyFileDigests.containsKey( filename )) {
-				reportConflict( filename );
-				return true;
+				reportConflict( filename, 2, emptyArray );
+				ifConflict = true;
 			}
 			Path path = Paths.get(filename);
 			// if this file not exist in file system, conflict
 			if( !Files.exists(path) ) {
-				reportConflict( filename );
-				return true;
+				reportConflict( filename, 1, emptyArray );
+				ifConflict = true;
 			}
 			// if change of file, then conflict
 			try {
 				String curHashContent = HashUtils.genSHA1(new String(Files.readAllBytes(path)));
 				if( !curHashContent.equals(copyFileDigests.get(filename)) ) {
-					reportConflict( filename );
-					return true;
+					reportConflict( filename, 1, emptyArray );
+					ifConflict = true;
 				}
 			} catch (IOException e) {
 				e.printStackTrace();
@@ -280,19 +306,35 @@ public class LchClient {
 			try {
 				String curHashContent = HashUtils.genSHA1(new String(Files.readAllBytes(path)));
 				if( !curHashContent.equals(copyFileDigests.get(filename)) ) {
-					reportConflict( filename );
-					return true;
+					reportConflict( filename, 0, commit.changedFiles.get(filename) );
+					ifConflict = true;
 				}
 			} catch (IOException e) {
 				e.printStackTrace();
 			}
 		}
-		return false;
+		return ifConflict;
 	}
 
-	private void reportConflict(String filename) {
+	private void reportConflict(String filename, int conflictType, byte[] bs ) {
 		// TODO Auto-generated method stub
-		System.err.println("Conflict " + filename);
+		if( conflictType==0 ) {
+			System.err.println("Conflict " + filename + " Saved as " + filename + ".serverversion");
+			Path path = Paths.get(filename+".serverversion");
+				try {
+					Files.write(path, bs,
+							StandardOpenOption.CREATE, StandardOpenOption.APPEND);
+				} catch (IOException e) {
+					// TODO Auto-generated catch block
+					e.printStackTrace();
+				}
+		}
+		else if( conflictType==2 ) {
+			System.err.println("Conflict " + filename + "The file is deleted in server");
+		}
+		else if( conflictType==3 ) {
+			System.err.println("Conflict" + filename + "The file is already deleted, deleted again in server");
+		}
 	}
 
 	private boolean doCommit(Command cmd) {
