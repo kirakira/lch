@@ -177,6 +177,16 @@ public class LchClient {
 		for(int i = 0; i < commits.size(); ++i) {
 			syncOneCommit( fileDigests, commits.get(i) );
 		}
+		
+//		// For debug
+//		System.out.println("{");		
+//		Iterator<String> it = fileDigests.keySet().iterator();
+//		while (it.hasNext()) {
+//			String key = it.next();
+//			System.out.println(key + " -> " + fileDigests.get(key));
+//		}
+//		System.out.println("}");
+		
 		if( commits.size()==0 )
 			System.out.println("No updated files, Sync Finished");
 		else
@@ -322,21 +332,29 @@ public class LchClient {
 		// For debug
 		System.out.println(commit.removedFiles);
 		Iterator<String> it1 = commit.changedFiles.keySet().iterator();
-		System.out.println("{");
+		System.out.println("changedFiles {");
 		while (it1.hasNext()) {
 			String key = it1.next();
 			System.out.println(key + " -> " + fileDigests.get(key));
 		}
 		System.out.println("}");		
 		
-		fileHashToFile();
-		System.out.println("{");		
+		System.out.println("Metadata {");
+		HashMap<String, String> old = fileHashFromFile();
+		it1 = old.keySet().iterator();
+		while (it1.hasNext()) {
+			String key = it1.next();
+			System.out.println(key + " -> " + fileDigests.get(key));
+		}
+		System.out.println("}");
+		
+		System.out.println("fileDigests {");
 		it1 = fileDigests.keySet().iterator();
 		while (it1.hasNext()) {
 			String key = it1.next();
 			System.out.println(key + " -> " + fileDigests.get(key));
 		}
-		System.out.println("}");		
+		System.out.println("}");	
 //		System.exit(1);
 		
 		commitReq.baseCommit = version;
