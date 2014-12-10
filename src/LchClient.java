@@ -98,7 +98,7 @@ public class LchClient {
 			version = 0;
 			curFileDigests = new HashMap<String, String>();
 		}
-        System.out.println("Initial version: " + version);
+        //System.out.println("Initial version: " + version);
 		return curFileDigests;
 	}
 	
@@ -364,31 +364,31 @@ public class LchClient {
 		}
 		
 		// For debug
-		System.out.println(commit.removedFiles);
-		Iterator<String> it1 = commit.changedFiles.keySet().iterator();
-		System.out.println("changedFiles {");
-		while (it1.hasNext()) {
-			String key = it1.next();
-			System.out.println(key + " -> " + fileDigests.get(key));
-		}
-		System.out.println("}");		
-		
-		System.out.println("Metadata {");
-		HashMap<String, String> old = fileHashFromFile();
-		it1 = old.keySet().iterator();
-		while (it1.hasNext()) {
-			String key = it1.next();
-			System.out.println(key + " -> " + fileDigests.get(key));
-		}
-		System.out.println("}");
-		
-		System.out.println("fileDigests {");
-		it1 = fileDigests.keySet().iterator();
-		while (it1.hasNext()) {
-			String key = it1.next();
-			System.out.println(key + " -> " + fileDigests.get(key));
-		}
-		System.out.println("}");	
+//		System.out.println(commit.removedFiles);
+//		Iterator<String> it1 = commit.changedFiles.keySet().iterator();
+//		System.out.println("changedFiles {");
+//		while (it1.hasNext()) {
+//			String key = it1.next();
+//			System.out.println(key + " -> " + fileDigests.get(key));
+//		}
+//		System.out.println("}");		
+//		
+//		System.out.println("Metadata {");
+//		HashMap<String, String> old = fileHashFromFile();
+//		it1 = old.keySet().iterator();
+//		while (it1.hasNext()) {
+//			String key = it1.next();
+//			System.out.println(key + " -> " + fileDigests.get(key));
+//		}
+//		System.out.println("}");
+//		
+//		System.out.println("fileDigests {");
+//		it1 = fileDigests.keySet().iterator();
+//		while (it1.hasNext()) {
+//			String key = it1.next();
+//			System.out.println(key + " -> " + fileDigests.get(key));
+//		}
+//		System.out.println("}");	
 //		System.exit(1);
 		
 		commitReq.baseCommit = version;
