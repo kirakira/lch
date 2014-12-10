@@ -162,8 +162,10 @@ public class LchClient {
 		List<Commit> commits = syncRes.commits;
 		Collections.sort(commits, new commitComparator());
 
-		if( commits.size()==0 )
+		if( commits.size()==0 ) {
 			System.out.println("No updated files, Sync Finished");
+		    return true;
+		}
 		// Check if a commit is in conflict
 		// merge all commits
 		for(int i = 1; i < commits.size(); ++i)
