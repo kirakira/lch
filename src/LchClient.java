@@ -174,10 +174,10 @@ public class LchClient {
 		
 		// We apply the hash of changed files to the value
 		if( isConflict( copyFileDigests, commits.get(0) ) ) {
-				System.err.println("In conflict with version" 
-									+ commits.get(0).commitId + " Sync finished" );
-				version = commits.get(0).commitId;
-				return false;
+			version = commits.get(0).commitId;
+			System.err.println("In conflict with version" 
+								+ commits.get(0).commitId + " Sync finished to version" + version );
+			return false;
 		}
 		
 		// No conflict, apply each commit
@@ -192,7 +192,7 @@ public class LchClient {
 //		}
 //		System.out.println("}");
 		
-		System.out.println("Successfully sync to version" + commits.get(commits.size()-1).commitId );
+		System.out.println("Successfully sync to version" + version );
 		return true;
 	}
 	
