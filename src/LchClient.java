@@ -295,6 +295,11 @@ public class LchClient {
 			}
 			else {
 				Files.deleteIfExists( path );
+				//Create parent dir
+				File f = new File(filename);
+				File parent = f.getParentFile();
+				parent.mkdirs();
+				
 				Files.write(path, commit.changedFiles.get(filename),
 						StandardOpenOption.CREATE, StandardOpenOption.APPEND);
 				fileDigests.put(filename, HashUtils.genSHA1(new String(commit.changedFiles.get(filename))) );
