@@ -138,9 +138,9 @@ public class LchClient {
 	
 	private boolean doSync(Command cmd) {
 		System.out.println("doSync");
-		System.out.println("Current Version: " + version);
 		// First, we copy current filename to hashValue mapping
 		fileDigests = fileHashFromFile();
+		System.out.println("Current Version: " + version);
 		//hashFiles(".");
 		@SuppressWarnings("unchecked")
 		HashMap<String, String> copyFileDigests = (HashMap<String, String>) fileDigests.clone();
@@ -351,13 +351,13 @@ public class LchClient {
 	}
 
 	private boolean doCommit(Command cmd) {
-		System.out.println("Current Version: " + version);
 		//System.out.println("doCommit");
 		CommitRequest commitReq = new CommitRequest();
 		commitReq.responseTitle = genRandomString();
 		
 		// Get historical hash value from meta data file
 		HashMap<String, String> oldFileDigests = fileHashFromFile();
+		System.out.println("Current Version: " + version);
 		hashFiles(".");
 		@SuppressWarnings("unchecked")
 		HashMap<String, String> curFileDigests = (HashMap<String, String>) fileDigests.clone();
