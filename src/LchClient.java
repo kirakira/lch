@@ -419,7 +419,7 @@ public class LchClient {
 		int numRetry = 0;
 		while (msg == null && (numRetry++) < maxNumRetry) {
 			Server server = pickRandomServer();
-			System.out.print("Commit#" + version+1 + " Try to connect " + server.addr + ":" + server.port);
+			System.out.print("Commit#" + (version+1) + " Try to connect " + server.addr + ":" + server.port);
 			net.sendMessage(server.addr, server.port, "CommitRequest", commitReq);
 			msg = net.receiveMessage(commitReq.responseTitle, NetIO.numNanosPerSecond * 10);
 			if (msg == null)
