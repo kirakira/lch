@@ -277,15 +277,16 @@ public class LchClient {
 					continue;
 				}
 			}
-			
-			// if change of file, then conflict
-			String curHashContent = HashUtils.genSHA1(new String(Files.readAllBytes(path)));
-			String serverHashContent = HashUtils.genSHA1(new String(commit.changedFiles.get(filename)));
-				
-			if( !curHashContent.equals(fileDigests.get(filename)) 
-					&& !curHashContent.equals(serverHashContent) ) {
-				reportConflict( filename, 0, commit.changedFiles.get(filename) );
-				confFile = true;
+			else {
+			    // if change of file, then conflict
+				String curHashContent = HashUtils.genSHA1(new String(Files.readAllBytes(path)));
+				String serverHashContent = HashUtils.genSHA1(new String(commit.changedFiles.get(filename)));
+					
+				if( !curHashContent.equals(fileDigests.get(filename)) 
+						&& !curHashContent.equals(serverHashContent) ) {
+					reportConflict( filename, 0, commit.changedFiles.get(filename) );
+					confFile = true;
+				}
 			}
 			
 			// apply changed files
