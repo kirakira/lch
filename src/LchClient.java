@@ -97,7 +97,6 @@ public class LchClient {
 		} catch (IOException | ClassNotFoundException e) {
 			version = 0;
 			curFileDigests = new HashMap<String, String>();
-			e.printStackTrace();
 		}
         System.out.println("Initial version: " + version);
 		return curFileDigests;
