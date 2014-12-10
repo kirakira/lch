@@ -181,9 +181,7 @@ public class LchClient {
 		}
 		
 		// No conflict, apply each commit
-		for(int i = 0; i < commits.size(); ++i) {
-			syncOneCommit( fileDigests, commits.get(i) );
-		}
+		syncOneCommit( fileDigests, commits.get(0) );
 		
 //		// For debug
 //		System.out.println("{");		
@@ -317,8 +315,10 @@ public class LchClient {
 			// if change of file, then conflict
 			try {
 				String curHashContent = HashUtils.genSHA1(new String(Files.readAllBytes(path)));
+				String serverHashContent = HashUtils.genSHA1(new String(commit.changedFiles.get(filename)));
+				
 				if( !curHashContent.equals(copyFileDigests.get(filename)) 
-						&& !curHashContent.equals(commit.changedFiles.get(filename)) ) {
+						&& !curHashContent.equals(serverHashContent) ) {
 					reportConflict( filename, 0, commit.changedFiles.get(filename) );
 					ifConflict = true;
 				}
