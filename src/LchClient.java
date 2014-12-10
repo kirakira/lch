@@ -318,6 +318,26 @@ public class LchClient {
 			}
 		}
 		
+		// For debug
+		System.out.println(commit.removedFiles);
+		Iterator<String> it1 = commit.changedFiles.keySet().iterator();
+		System.out.println("{");
+		while (it1.hasNext()) {
+			String key = it1.next();
+			System.out.println(key + " -> " + fileDigests.get(key));
+		}
+		System.out.println("}");		
+		
+		fileHashToFile();
+		System.out.println("{");		
+		it1 = fileDigests.keySet().iterator();
+		while (it1.hasNext()) {
+			String key = it1.next();
+			System.out.println(key + " -> " + fileDigests.get(key));
+		}
+		System.out.println("}");		
+//		System.exit(1);
+		
 		commitReq.baseCommit = version;
 		commitReq.proposedCommit = commit;
 		
