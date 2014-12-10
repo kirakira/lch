@@ -173,16 +173,19 @@ public class LchClient {
 			mergeCommits( commits.get(0), commits.get(i) );
 		
 		// We apply the hash of changed files to the value
-		if( isConflict( copyFileDigests, commits.get(0) ) ) {
-			version = commits.get(0).commitId;
-			System.err.println("In conflict with version" 
-								+ commits.get(0).commitId + " Sync finished to version" + version );
-			return false;
+		try {
+			if( checkConflictAndSync( fileDigests, commits.get(0) ) ) {
+				version = commits.get(0).commitId;
+				System.err.println("In conflict with version" 
+									+ commits.get(0).commitId + " Sync finished to version" + version );
+				fileHashToFile();
+				return false;
+			}
+		} catch (IOException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
 		}
-		
-		// No conflict, apply each commit
-		syncOneCommit( fileDigests, commits.get(0) );
-		
+				
 //		// For debug
 //		System.out.println("{");		
 //		Iterator<String> it = fileDigests.keySet().iterator();
@@ -219,49 +222,6 @@ public class LchClient {
 	}
 
 	/**
-	 * Apply the commit to current file system with change of hashvalue
-	 * @param fileDigests2
-	 * mapping from filename to content hash
-	 * @param commit
-	 * one commit
-	 */
-	private void syncOneCommit(HashMap<String, String> fileDigests2,
-			Commit commit) {
-		// remove these files
-		System.out.println("Client: Removed Size = " + commit.removedFiles.size() 
-							+ " Changed Size = " + commit.changedFiles.size() );		
-		for(String filename : commit.removedFiles) {
-			try {
-				Path path = Paths.get(filename);
-				Files.deleteIfExists( path );
-				fileDigests2.remove( filename );
-			} catch (IOException e) {
-				// TODO Auto-generated catch block
-				e.printStackTrace();
-			}
-		}
-		// apply changed files into copyFileDigests
-		for(String filename : commit.changedFiles.keySet()) {
-			Path path = Paths.get(filename);
-			try {
-				Files.deleteIfExists( path );
-				Files.write(path, commit.changedFiles.get(filename),
-						StandardOpenOption.CREATE, StandardOpenOption.APPEND);
-				fileDigests2.put(filename, HashUtils.genSHA1(new String(commit.changedFiles.get(filename))) );
-			} catch (IOException e) {
-				// TODO Auto-generated catch block
-				e.printStackTrace();
-			}
-		}
-		
-		// maintain the version and metadatafile
-		version = commit.commitId;
-		fileHashToFile();
-		
-		System.out.println("Sync to Version: " + version);
-	}
-
-	/**
 	 * Check if the commit is in conflict with the hash values of existed files
 	 * That equals to check if the removed & changed files exist in current version
 	 * @param copyFileDigests 
@@ -270,62 +230,79 @@ public class LchClient {
 	 * The commit
 	 * @return 
 	 * true if conflict, otherwise false
+	 * @throws IOException 
 	 */
-	private boolean isConflict(HashMap<String, String> copyFileDigests,
-			Commit commit) {
+	private boolean checkConflictAndSync(HashMap<String, String> fileDigests,
+			Commit commit) throws IOException {
 		boolean ifConflict = false;
 		byte[] emptyArray = {};
+		
 		// check if all removed files exist in copyFileDigests
 		for(String filename : commit.removedFiles) {
 			// if this file not exist in hashmap, conflict
-			if( !copyFileDigests.containsKey( filename )) {
+			boolean confFile = false;
+			Path path = Paths.get(filename);
+			if( !fileDigests.containsKey( filename )) {
 				reportConflict( filename, 2, emptyArray );
+				confFile = true;
+			}
+			
+			// if change of file, then conflict
+			if( Files.exists(path) ) {
+				String curHashContent = HashUtils.genSHA1(new String(Files.readAllBytes(path)));
+				if( Files.exists(path) && !curHashContent.equals(fileDigests.get(filename)) ) {
+					reportConflict( filename, 1, emptyArray );
+					confFile = true;
+				}
+			}
+			
+			// do sync
+			if( confFile ) {
 				ifConflict = true;
 			}
-			Path path = Paths.get(filename);
-			// if this file not exist in file system, conflict
-			//if( !Files.exists(path) ) {
-			//	reportConflict( filename, 1, emptyArray );
-			//	ifConflict = true;
-			//}
-			// if change of file, then conflict
-			try {
-				String curHashContent = HashUtils.genSHA1(new String(Files.readAllBytes(path)));
-				if( !curHashContent.equals(copyFileDigests.get(filename)) ) {
-					reportConflict( filename, 1, emptyArray );
-					ifConflict = true;
-				}
-			} catch (IOException e) {
-				e.printStackTrace();
+			else {
+				Files.deleteIfExists( path );
+				fileDigests.remove( filename );
 			}
 		}
 		
 		for(String filename : commit.changedFiles.keySet()) {
 			Path path = Paths.get(filename);
+			boolean confFile = false;
 			// if this file not exist in file system, conflict
 			if( !Files.exists(path) ) {
-				if( copyFileDigests.containsKey(filename) ) {
+				if( fileDigests.containsKey(filename) ) {
 					reportConflict( filename, 0, commit.changedFiles.get(filename) );
 					ifConflict = true;
 					continue;
 				}
-				else
-					continue;
 			}
+			
 			// if change of file, then conflict
-			try {
-				String curHashContent = HashUtils.genSHA1(new String(Files.readAllBytes(path)));
-				String serverHashContent = HashUtils.genSHA1(new String(commit.changedFiles.get(filename)));
+			String curHashContent = HashUtils.genSHA1(new String(Files.readAllBytes(path)));
+			String serverHashContent = HashUtils.genSHA1(new String(commit.changedFiles.get(filename)));
 				
-				if( !curHashContent.equals(copyFileDigests.get(filename)) 
-						&& !curHashContent.equals(serverHashContent) ) {
-					reportConflict( filename, 0, commit.changedFiles.get(filename) );
-					ifConflict = true;
-				}
-			} catch (IOException e) {
-				e.printStackTrace();
+			if( !curHashContent.equals(fileDigests.get(filename)) 
+					&& !curHashContent.equals(serverHashContent) ) {
+				reportConflict( filename, 0, commit.changedFiles.get(filename) );
+				confFile = true;
+			}
+			
+			// apply changed files
+			if( confFile ) {
+				ifConflict = true;
+			}
+			else {
+				Files.deleteIfExists( path );
+				Files.write(path, commit.changedFiles.get(filename),
+						StandardOpenOption.CREATE, StandardOpenOption.APPEND);
+				fileDigests.put(filename, HashUtils.genSHA1(new String(commit.changedFiles.get(filename))) );
 			}
 		}
+		
+		// maintain the version and metadatafile
+		version = commit.commitId;
+		fileHashToFile();
 		return ifConflict;
 	}
 
@@ -370,6 +347,7 @@ public class LchClient {
 		commit.commitId = version + 1;
 		commit.removedFiles.addAll(oldFileDigests.keySet());
 		commit.removedFiles.removeAll(curFileDigests.keySet());
+		commit.nanoTimestamp = System.nanoTime();
 
 		Iterator<String> it = curFileDigests.keySet().iterator();
 		while (it.hasNext()) {
