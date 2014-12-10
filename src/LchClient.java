@@ -298,13 +298,18 @@ public class LchClient {
 				e.printStackTrace();
 			}
 		}
+		
 		for(String filename : commit.changedFiles.keySet()) {
 			Path path = Paths.get(filename);
 			// if this file not exist in file system, conflict
 			if( !Files.exists(path) ) {
-				reportConflict( filename, 0, commit.changedFiles.get(filename) );
-				ifConflict = true;
-				continue;
+				if( copyFileDigests.containsKey(filename) ) {
+					reportConflict( filename, 0, commit.changedFiles.get(filename) );
+					ifConflict = true;
+					continue;
+				}
+				else
+					continue;
 			}
 			// if change of file, then conflict
 			try {
