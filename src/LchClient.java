@@ -229,8 +229,9 @@ public class LchClient {
 	private void syncOneCommit(HashMap<String, String> fileDigests2,
 			Commit commit) {
 		// remove these files
+		System.out.println("Current Version: " + version);
 		System.out.println("Client: Removed Size = " + commit.removedFiles.size() 
-							+ "Changed Size = " + commit.changedFiles.size() );		
+							+ " Changed Size = " + commit.changedFiles.size() );		
 		for(String filename : commit.removedFiles) {
 			try {
 				Path path = Paths.get(filename);
@@ -258,6 +259,8 @@ public class LchClient {
 		// maintain the version and metadatafile
 		version = commit.commitId;
 		fileHashToFile();
+		
+		System.out.println("Sync to Version: " + version);
 	}
 
 	/**
@@ -348,6 +351,7 @@ public class LchClient {
 	}
 
 	private boolean doCommit(Command cmd) {
+		System.out.println("Current Version: " + version);
 		//System.out.println("doCommit");
 		CommitRequest commitReq = new CommitRequest();
 		commitReq.responseTitle = genRandomString();
