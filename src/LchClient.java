@@ -298,7 +298,8 @@ public class LchClient {
 				//Create parent dir
 				File f = new File(filename);
 				File parent = f.getParentFile();
-				parent.mkdirs();
+				if (parent != null)
+					parent.mkdirs();
 				
 				Files.write(path, commit.changedFiles.get(filename),
 						StandardOpenOption.CREATE, StandardOpenOption.APPEND);
