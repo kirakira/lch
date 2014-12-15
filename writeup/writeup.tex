@@ -61,7 +61,17 @@ This motivates our project.
 Simply speaking, LCH is a version control system that will store source code reliably on a distributed set of servers.
 Source code is different from other application in that it needs to be precise at any time.
 Thus strong consistency needs to be preserved while replicating data.
-We will share our experience in how to use the Paxos\ref{paxos} protocol to help us achieve this end.
+Paxos\ref{paxos} is a protocol that solves the consensus problem in a distributed system.
+With the help of an update log, we can build a strongly consistent distributed system that replicates data across many servers.
+
+LCH is designed to tolerate failures.
+When a failed server is restarted, it will first operate in a 3-step catch-up mode.
+Unlike the catch-up mode proposed by Google \ref{paxos2}, we add an additional third step that will make sure everything missed out is collected.
+The catch-up mode will be discussed in detail in Section~\ref{sec:impl}.
+
+In the original protocol, it is possible that Paxos rounds keep failing because multiple proposers make conflicting proposes in an alternating way.
+We propose random backoff to mitigate this issue.
+In our solution, when such scenario is detected, a proposer will, with a certain probability, try to postpone its proposal for a random period of time, so as to minimize the likelihood that more than one proposers propose at the same time.
 
 In the rest of this paper we discuss the various trade-offs in when we design LCH, and we share our experience in implementing it.
 It is organized as follows: in Section~\ref{sec:design}, we discuss our reasonings and considerations behind the various decisions we made in designing LCH.
@@ -72,9 +82,52 @@ Section~\ref{sec:conclusion} concludes our project.
 
 \section{Design}
 \label{sec:design}
+In this section we will discuss the design of LCH, as well as our reasonings behind every decision.
+
+\subsection{System Overview}
+LCH is a client-server application.
+Unlike a traditional version control system, user data is replicated on multiple LCH servers for reliability.
+Figure~\ref{fig:1} shows a typical topology structure of LCH.
+
+\subsection{Client Design}
+LCH uses similar terminologies and concepts as were used in other version control systems.
+A version is a state consisting of the states of all managed files.
+Changes made to a version are called a commit, and a commit will lead to a new version.
+LCH provides linear version history, which means commits can only be made to the latest version.
+As a consequence, every version is associated with a single integral number, beginning from $0$, which is the version for an empty repository.
+It is worth noting that although we choose to implement LCH using linear version history, DAG version history can also be achieved under our design.
+We choose to use linear version history because it provides a cleaner and more understandable interface to the user, and it is less likely for misoperations to happen.
+Though a DAG-based history is more powerful and flexible, it is also harder to implement and we choose not to spend our efforts on it.
+
+The client offers two simple commands, \texttt{sync} and \texttt{commit}.
+\texttt{sync} will pull from a server recent changes from the current version of the client, and then the client will apply all those changes.
+A \emph{conflict} may happen when both remote and local changes are made to the same file.
+
+
+LCH is a distributed system.
+Multiple servers can serve their own clients in the same time.
+Every client can choose to connect to any LCH server, and servers will handle replication and consistency behind the scene.
+Client will feel like there is only one server there.
+That being said, when the server a client is connecting to is not responding, the client can choose to connect to any other server.
+In contrast to our distributed design, an alternative is to use a master-slave scheme.
+Although the master-slave scheme handles consistency issues more easily, it is less reliable than our distributed structure.
+For example, when a master failure is monitored, a master flip must be done.
+During the flip, there is a short period of time that the system is not available.
+Moreover, a master failure may also cause data loss.
+
 \subsection{Linear History}
 \subsection{Explicit Checkpointing}
 \subsection{Full Replication}
+Every LCH server is identical and equally capable.
+This means, every LCH server will store a whole database of all history commits.
+We did not choose to partition data for the following reasons:
+\begin{itemize}
+    \item Full replication provides higher read throughput than partitioning does.
+        In our current design, every server is able to serve read requests clients in parallel
+        If we partition our data
+    \item
+\end{itemize}
+
 \subsection{Consistency and Conflict Resolution}
 \subsection{Fault-Tolerant}
 \subsection{Online Edits}
