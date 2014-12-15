@@ -17,6 +17,14 @@
 \begin{document}
 \maketitle
 
+\abstract{
+    Today popular source code version control systems do not replicate data for reliability.
+    We share our experience in building LCH (abbreviated from Launch), a reliable source code version control system.
+    LCH replicates data on multiple servers and uses the Paxos\ref{paxos} protocol along with an update log to provide strong consistency to clients.
+    With a three-step catch-up mode, LCH can also recover from failures seamlessly.
+    Our test results show LCH is a reliable version control system.
+}
+
 \section{Introduction}
 
 A version control system is a system that keeps track of multiple history versions of every managed document, and allows a user to checkout or revert to previous versions as needed.
@@ -40,7 +48,7 @@ Due to different applications, a version control system can differ from another 
         Some systems have a centralized server and thus are vulnerable to single-node failures (Subversion, CVS, git, Mercurial\footnotemark),
         while others will store data reliably on a distributed set of servers (Google Docs).
         \footnotetext{
-        Although git and Mercurial are capable of storing data on multiple servers, this operation is not supported natively and users will need to push data to every single place manually.
+        Although git and Mercurial are capable of storing data on multiple servers, replication is not supported natively and users will need to push data to every single place manually.
         Moreover, since atomicity is not provided when doing so, it may will cause complex consistency issues.
     For this reason, most git and Mercurial users will use git and Mercurial in the same way as they use Subversion: designate a central server to store all the data.}
     \item Offline edits.
@@ -55,7 +63,7 @@ Source code is different from other application in that it needs to be precise a
 Thus strong consistency needs to be preserved while replicating data.
 We will share our experience in how to use the Paxos\ref{paxos} protocol to help us achieve this end.
 
-In the rest of this report we discuss the various trade-offs in when we design LCH, and we share our experience in implementing it.
+In the rest of this paper we discuss the various trade-offs in when we design LCH, and we share our experience in implementing it.
 It is organized as follows: in Section~\ref{sec:design}, we discuss our reasonings and considerations behind the various decisions we made in designing LCH.
 Section~\ref{sec:impl} will mainly focus on implementation details of the server and the client, including how we incorporate the Paxos protocol in our system and some improvements of it.
 Section~\ref{sec:eval} will state our methodology in evaluating our system.
