@@ -7,8 +7,8 @@
 \usepackage[]{algorithm2e}
 \usepackage{xcolor,listings}
 \usepackage{multirow}
-\title{Report for CS739 Project2}
-\author{Menghui Wang, Lichao Yin, Shike Mei}
+\title{LCH: A Reliable Distributed Version Control System}
+\author{Shike Mei, Menghui Wang, Lichao Yin}
 
 \begin{document}
 \maketitle
@@ -34,7 +34,7 @@ Given the issues with current VCS, we propose LCH to deal with such issues: no s
 
 \section{Client}
 
-LCH provides users with a simple interface to maintain a \textbf{linear version} history. Each version is called a commit, and an integer version number is associated with every commit. LCH provides two commands to work with: sync and commit. 
+LCH provides users with a simple interface to maintain a \emph{linear} version history. Each version is called a commit, and an integer version number is associated with every commit. LCH provides two commands to work with: sync and commit. 
 \begin{itemize}
   \item sync: pull changes from the server since the last commit in the local workset, and write those changes to corresponding local files. If a conflict is detected (both remote and local change the same place), user will be directed to resolve the conflict.
   \item commit: push local changes to the server as a new commit. The commit will be accepted if and only if the local version it is based on is up to date (i.e., last local commit matches the most recent commit on the server). If the commit is rejected, the user will be prompted to run a synccommand first.
