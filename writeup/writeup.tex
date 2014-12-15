@@ -89,6 +89,18 @@ LCH is a client-server application.
 Unlike a traditional version control system, user data is replicated on multiple LCH servers for reliability.
 Figure~\ref{fig:1} shows a typical topology structure of LCH.
 
+\subsection{Distributed Servers}
+LCH is a distributed system.
+Multiple servers can serve their own clients in the same time.
+Every client can choose to connect to any LCH server, and servers will handle replication and consistency behind the scene.
+Client will feel like there is only one server there.
+That being said, when the server a client is connecting to is not responding, the client can choose to connect to any other server.
+In contrast to our distributed design, an alternative is to use a master-slave scheme.
+Although the master-slave scheme handles consistency issues more easily, it is less reliable than our distributed structure.
+For example, when a master failure is monitored, a master flip must be done.
+During the flip, there is a short period of time that the system is not available.
+Moreover, a master failure may also cause data loss.
+
 \subsection{Client Design}
 LCH uses similar terminologies and concepts as were used in other version control systems.
 A version is a state consisting of the states of all managed files.
@@ -102,34 +114,49 @@ Though a DAG-based history is more powerful and flexible, it is also harder to i
 The client offers two simple commands, \texttt{sync} and \texttt{commit}.
 \texttt{sync} will pull from a server recent changes from the current version of the client, and then the client will apply all those changes.
 A \emph{conflict} may happen when both remote and local changes are made to the same file.
+In this case, the remote change will not be applied, and a copy of the remote file will be created.
+Then the user will be directed to resolve the conflict.
+We choose to let the user to resolve conflicts for the following two reasons:
+\begin{itemize}
+    \item The conflicts happen in LCH are not easily resolvable by a machine or by certain rules.
+        A conflict usually involves two uncomparable versions due to modifications made on an outdated repository.
+        Consolidating them requires knowledge beyond the scope of the system.
+    \item Human has a better understanding of what the code is doing, and is more capable of resolving conflicts.
+\end{itemize}
 
+\texttt{commit} command will scan the all the local files, and compute the changes made to the current local version.
+Then it will push these changes to the remote server.
+There are two possible outcomes: accepted or rejected.
+If the commit is accepted, then the local version is advanced by $1$.
+Otherwise, it must be because the local version is out-dated.
+Thus the user must run the \texttt{sync} command first.
+The main reason LCH uses explicit checkpointing is that we feel it is better to let user to organize each commit because user has a better understanding of what the code does.
 
-LCH is a distributed system.
-Multiple servers can serve their own clients in the same time.
-Every client can choose to connect to any LCH server, and servers will handle replication and consistency behind the scene.
-Client will feel like there is only one server there.
-That being said, when the server a client is connecting to is not responding, the client can choose to connect to any other server.
-In contrast to our distributed design, an alternative is to use a master-slave scheme.
-Although the master-slave scheme handles consistency issues more easily, it is less reliable than our distributed structure.
-For example, when a master failure is monitored, a master flip must be done.
-During the flip, there is a short period of time that the system is not available.
-Moreover, a master failure may also cause data loss.
-
-\subsection{Linear History}
-\subsection{Explicit Checkpointing}
 \subsection{Full Replication}
 Every LCH server is identical and equally capable.
 This means, every LCH server will store a whole database of all history commits.
-We did not choose to partition data for the following reasons:
+We do not choose to partition our data for the following reasons:
 \begin{itemize}
     \item Full replication provides higher read throughput than partitioning does.
-        In our current design, every server is able to serve read requests clients in parallel
-        If we partition our data
-    \item
+        In our current design, every server is able to serve sync requests clients in parallel
+        (not true for commit requests because they need to go through a Paxos round).
+        If we partition our data, every server will only be able to serve requests concerning the portion of data it has.
+    \item As for a version control system for source code, it is unlikely that the size of a single repository will exceeds the limit of a single machine.
+        Therefore there is no need to replicate data for capacity as well.
 \end{itemize}
 
-\subsection{Consistency and Conflict Resolution}
+\subsection{Strong Consistency}
+Source code must be precise at all times.
+Therefore we choose to preserve strong consistency in our system.
+That is, every \texttt{sync} command will return the latest version by a most recent \texttt{commit}.
+
+Strong consistency is at the cost of reduced throughput.
+To preserve strong consistency, every commit must go through a full Paxos round, which will involve all servers to participate.
+As a result, only one commit will be accepted at a time among all servers.
+However, as a tool for managing source code, we do not anticipate a very high concurrent commit rate.
+
 \subsection{Fault-Tolerant}
+
 \subsection{Online Edits}
 \subsection{A Typical Workflow}
 
