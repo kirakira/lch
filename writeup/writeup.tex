@@ -1,0 +1,60 @@
+\documentclass[11pt]{article}
+\usepackage{epstopdf}
+\usepackage{amssymb,amsmath}
+%\usepackage{subfigure}
+\usepackage{subcaption}
+\usepackage{graphicx}
+\usepackage[]{algorithm2e}
+\usepackage{xcolor,listings}
+\usepackage{multirow}
+\title{Report for CS739 Project2}
+\author{Menghui Wang, Lichao Yin, Shike Mei}
+
+\begin{document}
+\maketitle
+\section{Introduction}
+
+Version control systems (VCS) allow people to contribute their parts in the same project at the same time. A good VCS should be convenient that people can make edits at any time and the consistency and reliability are maintained. Previous VCS systems suffer low consistency or single point failure. SVN and CVS, as one kind of popular VCS, store data in only one server. When the server is down (single point failure), user cannot get information from the server. Git or hg, as another mainstream VCS, store data in multiple servers. But they need users to manually select the server to push data and do not guarantee consistent. So when one user push the edits in one server and another user check the edits on another server, he may miss the edits. The problems are summarized in Table~\ref{table:problems}
+
+\begin{table}
+    \centering
+\begin{tabular}{|c|c|}
+  \hline
+  % after \\: \hline or \cline{col1-col2} \cline{col3-col4} ...
+  Popular VCS & Problem  \\ \hline
+  SVN, CVS & Single server failure \\
+  git, hg & Needs manual push to everyserver \\
+  \hline
+\end{tabular}
+\caption{Comparison of popular VCS}
+\label{table:problems}
+\end{table}
+
+Given the issues with current VCS, we propose LCH to deal with such issues: no single point failure to improve reliability, and automatically replication to maintain strong consistency. We decide to use multiple servers, and use Paxos [1] protocol to achieve strong consistency among servers. Furthermore, when a server went down and restarted, we use the catch-up procedure [2] recover it to the latest version. Our experiment on consistency, reliability shows that LCH is a strong consistent and reliable VCS.
+
+\section{Client}
+
+LCH provides users with a simple interface to maintain a \textbf{linear version} history. Each version is called a commit, and an integer version number is associated with every commit. LCH provides two commands to work with: sync and commit. 
+\begin{itemize}
+  \item sync: pull changes from the server since the last commit in the local workset, and write those changes to corresponding local files. If a conflict is detected (both remote and local change the same place), user will be directed to resolve the conflict.
+  \item commit: push local changes to the server as a new commit. The commit will be accepted if and only if the local version it is based on is up to date (i.e., last local commit matches the most recent commit on the server). If the commit is rejected, the user will be prompted to run a synccommand first.
+\end{itemize}
+A typical work flow of the client is as belows.
+\begin{itemize}
+  \item Initialization
+  \item Make local changes
+  \item sync
+  \item Resolve conflicts
+  \item commit
+  \item Accepted? If yes, goto make local change; if no, goto sync
+\end{itemize}
+
+We note implementation details: First, when initialize the client, we need to set the directory for local copy and the path for metadata file. The metadata file stores the version information of latest sync from the server. Second, when doing sync, we first randomly ask a server to get the metadata and all changed information since the last sync version. Then, we compare the local changes on the last sync version and the changes of the latest version, if the two changes are different, we report a conflict file. For each conflict file, we update the file to latest server version, but make the copy the local changed version and warn user to resolve the conflict. Third, when doing commit, the client will first randomly ask a server the latest version, only when the versions are the same the commit can proceed. Send all changed files to the server, once the server returns ``successfully committed'', the client update the metadata file.
+
+\section{References}
+
+[1] Lamport, L. (2001). Paxos made simple. ACM Sigact News, 32(4), 18-25.
+
+[2] Chandra, T. D., Griesemer, R., \& Redstone, J. (2007, August). Paxos made live: an engineering perspective. In Proceedings of the twenty-sixth annual ACM symposium on Principles of distributed computing (pp. 398-407). ACM.
+
+\end{document}
