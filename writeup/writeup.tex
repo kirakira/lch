@@ -253,9 +253,36 @@ Finally, the condition variable \texttt{roundFinish} is signaled to wake all pro
 
 \subsection{Catch-up Mode}
 When a server is back from failure, it cannot start to serve immediately because of its out-of-date update log and database.
+To get synchronized with the latest state, it executes in catch-up mode.
 
+\begin{enumerate}
+    \item At the first step, the server will do an anti-entropy pull of update log from another server.
+        Since every server operating in normal mode must have latest database and update log, it suffices to pull from one server.
+    \item Then it participates in a full Paxos round as an observer.
+        This means,
+        \begin{itemize}
+            \item It will observe the round and learn the results of this round.
+            \item But it cannot vote or propose.
+        \end{itemize}
+        This Paxos round is necessary for the following reasons:
+        \begin{itemize}
+            \item It needs to know the current largest proposal number.
+                This number will be used for future proposals.
+            \item It needs to make sure that it has grabbed the latest update.
+            \item It needs to make sure it be in the start of a new Paxos round when back in the normal mode, not in the middle of a ongoing Paxos round.
+        \end{itemize}
+    \item Finally another anti-entropy pull is done to collect all updates happened between step $1$ and step $2$.
+        This step is also necessary.
+        Consider for example the server started step $2$ in the middle of an ongoing Paxos round.
+        It is very likely that the server will only receive part (less than half) of the ``accpeted'' votes while actually all servers voted ``accepted'' (the votes the current server missed were delivered before the current server started step $2$).
+        Consequently the current server will not consider this as a successful Paxos round, while other servers will because other servers have received all ``accepted'' votes.
+        As a result, the current server will not learn the result.
+        This missed result will need to be collected in step $3$.
+\end{enumerate}
+The above catch-up mode is different from the catch-up mode introduced in \ref{paxos2} in that it adds a third step that will collect all updates missed during the execution of the first and the second step.
 
 \subsection{Random Backoff}
+
 \subsection{Client}
 
 LCH provides users with a simple interface to maintain a \emph{linear} version history. Each version is called a commit, and an integer version number is associated with every commit. LCH provides two commands to work with: sync and commit. 
