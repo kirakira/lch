@@ -1,8 +1,43 @@
 import java.util.*;
+import java.sql.Timestamp;
 
 public class ServerTester {
     public static final void main(String[] args) {
-        testPaxos();
+        //testPaxos();
+        testThroughput(9);
+    }
+
+    public static void testThroughput(int n) {
+        int basePort = 12345;
+        LchServer[] servers = new LchServer[n];
+        List<String> serverList = new ArrayList<String>();
+        for (int i = 0; i < n; ++i)
+            serverList.add("localhost:" + (basePort + i));
+        for (int i = 0; i < n; ++i)
+            servers[i] = new LchServer(basePort + i, i, serverList, false, null);
+
+        NetIO client = new NetIO(basePort + n);
+        long t0 = getTimestamp();
+        for (int i = 0; i < 100; ++i) {
+            int j = rand.nextInt(n);
+            CommitRequest cr = new CommitRequest();
+            cr.baseCommit = getVersion(serverList.get(j), client);
+            cr.responseTitle = randomTitle();
+            cr.proposedCommit = new Commit();
+            cr.proposedCommit.commitId = cr.baseCommit + 1;
+            cr.proposedCommit.message = randomTitle();
+
+            client.sendMessage(serverList.get(j), "CommitRequest", cr);
+            CommitResponse res = (CommitResponse) client.receiveMessage(cr.responseTitle, 20 * NetIO.numNanosPerSecond).content;
+        }
+        System.out.println("Time spent: " + (getTimestamp() - t0));
+        for (int i = 0; i < n; ++i)
+            servers[i].close();
+        client.close();
+    }
+
+    public static long getTimestamp() {
+        return new Timestamp(new Date().getTime()).getTime();
     }
 
     public static void testPaxos() {
