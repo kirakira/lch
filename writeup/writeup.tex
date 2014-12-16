@@ -11,6 +11,7 @@
 \usepackage{xcolor,listings}
 \usepackage{multirow}
 \usepackage{hyperref}
+\newtheorem{thm}{Theorem}
 
 \setcounter{secnumdepth}{4}
 \titleformat{\paragraph}
@@ -189,8 +190,7 @@ LCH tolerates non-Byzantine failures by replication.
 When a server failed, since all the servers are equally capable, the client can choose to connect to any other servers with the same request.
 As long as the total number of failed servers is less than half of the total, LCH will work normally.
 This result is implied by the fault-tolerant characteristic of the Paxos protocol.
-
-To see rigorously how replication improves the reliability, we can do some simple maths.
+To see rigorously how replication improves the reliability, one can refer to Theorem~\ref{thm:1} in Appendix.
 
 When a failed server is restarted, it must start in a catch-up mode.
 The catch-up mode will help the failed server catch up all the information it missed during failures.
@@ -252,6 +252,9 @@ When a round is finished, \texttt{promise} and \texttt{accepted} are first clear
 Finally, the condition variable \texttt{roundFinish} is signaled to wake all proposers sleeping on that.
 
 \subsection{Catch-up Mode}
+When a server is back from failure, it cannot start to serve immediately because of its out-of-date update log and database.
+
+
 \subsection{Random Backoff}
 \subsection{Client}
 
@@ -281,6 +284,50 @@ We note implementation details: First, when initialize the client, we need to se
 
 \section{Conclusion}
 \label{sec:conclusion}
+
+\appendix
+\section{A Proof that Replication Improves Reliability}
+\begin{thm}
+    \label{thm:1}
+    Assuming that each server fails independently with probability $p$ $(p<0.5)$.
+    If there are $2n+1$ servers, then the probability that more than $n$ servers fail simultaneously is less than $p$.
+\end{thm}
+\begin{proof}
+    Let $S \subset \left\{1,\ldots,2n+1\right\}$ be the set of failed servers.
+    The probability that $m$ out of $2n+1$ servers fail simultaneously (denote as $\Pr(|S|=m)$) is 
+    \begin{eqnarray*}
+        P(S=m) = \binom{2n+1}{m} p^{m} (1-p)^{2n+1-m},
+    \end{eqnarray*}
+    where $\binom{2n+1}{m}$ is the binomial coefficient.
+    The probability that more than $n$ servers fails is denoted as $\Pr(|S|\geq n+1)$.
+    \begin{eqnarray*}
+        \Pr\left(|S|\geq n+1\right) = \sum_{m=n+1}^{2n+1} \binom{2n+1}{m} p^{m} (1-p)^{2n+1-m}.
+    \end{eqnarray*}
+    To prove that $\Pr(|S|\geq n+1) < p$, we first show prove that $\Pr(|S|\geq n+1)/p = 1$ 
+    when $p=1/2$. It is because
+    \begin{eqnarray*}
+        P(|S|\geq n+1) &=& \sum_{m=n+1}^{2n+1} \binom{2n+1}{m} p^{m} (1-p)^{2n+1-m} \\ 
+        (because~p=1/2)~&=& \sum_{m=n+1}^{2n+1} \binom{2n+1}{m} \left(\frac{1}{2}\right)^{2n+1} \\
+        \left(because~\binom{2n+1}{m}=\binom{2n+1}{2n+1-m}\right)~&=& \frac{1}{2}\left(  \sum_{m=0}^{2n+1} 
+        \binom{2n+1}{m} \left(\frac{1}{2}\right)^{2n+1} \right) \\
+        &=& \frac{1}{2}.
+    \end{eqnarray*}
+    We then prove that the $P(|S|\leq n+1)/p$ is monotonously increasing with as $p$ 
+    increasing (and $p<1/2$) by showing the derivative with respect to $p$ is positive
+    \begin{eqnarray*}
+        \frac{\mathrm{d}}{\mathrm{d}p}\Pr(|S|\geq n+1)/p &=& \sum_{m=n+1}^{2n+1} \binom{2n+1}{m} \left(\left(m-1\right)p^{m-2}
+        \left(1-p\right)^{2n+1-m} \right.\\
+        &&\left. - \left(2n+1-m\right)p^{m-1}\left(1-p\right)^{2n+1-m-1}\right) \\
+        &=& \sum_{m=n+1}^{2n+1} \binom{2n+1}{m} \left(p^{m-2} 
+        \left(1-p\right)^{2n+1-m-1}\left(m-1-2np\right)\right)\\
+        (because~m-1-2np>0)&>& 0.
+    \end{eqnarray*}
+    So $\Pr(|S|\geq n+1)/p$ is increasing with $p$ when $p<0.5$.
+    Since $\Pr(|S|\geq n+1)/p=1$ when $p=1/2$ and for $p<1/2$, $\Pr(|S|\geq n+1)/p$ is 
+    increasing, $\Pr(|S|\geq n+1)/p < 1$ for all $p<1/2$. Therefore, the probability 
+    that more than $n$ out of $2n+1$ servers fail simultaneously is smaller than 
+    $p$.
+\end{proof}
 
 
 \section{References}
