@@ -132,6 +132,28 @@ Otherwise, it must be because the local version is out-dated.
 Thus the user must run the \texttt{sync} command first.
 The main reason LCH uses explicit checkpointing is that we feel it is better to let user to organize each commit because user has a better understanding of what the code does.
 
+\subsubsection{Online Commits}
+LCH requires that all commits must be submitted to servers at the time they are made.
+Therefore no offline commits are allowed.
+This is a consequence of our previous designs,
+\begin{itemize}
+    \item Since it is possible that a commit be rejected by the server, the client must contact the server to know if this is the case.
+    \item If we allow a commit to be staged but not submitted, it will cause more consistency issues.
+        Suppose one of the staged commit turns out to be rejected by the server.
+        What should we do to its following commits?
+        There is no easy way we can handle this under our linear history model.
+\end{itemize}
+
+\subsubsection{A Typical Workflow}
+Figure~\ref{fig:2} shows a typical use case of LCH.
+The user first run a \texttt{sync} command to sync its local repository.
+The user then make modifications to its local repository until it is ready for a checkpoint.
+Then a \texttt{commit} command will be run, and the client will notify if the commit is accepted or not.
+If the commit is accepted, the user can keep making other changes.
+Otherwise, the user must run a \texttt{sync} command to pull latest changes from the server.
+Conflicts may happen during this step, and if this is the case, the user must resolve conflicts given the remote file and the local file.
+When conflicts are resolved, the user can run another \texttt{commit} command to submit previous changes (along with the conflict resolution).
+
 \subsection{Full Replication}
 Every LCH server is identical and equally capable.
 This means, every LCH server will store a whole database of all history commits.
@@ -155,10 +177,20 @@ To preserve strong consistency, every commit must go through a full Paxos round,
 As a result, only one commit will be accepted at a time among all servers.
 However, as a tool for managing source code, we do not anticipate a very high concurrent commit rate.
 
-\subsection{Fault-Tolerant}
+\subsection{Fault-Tolerant and Recovery}
+LCH tolerates failures by replication.
+When a server failed, since all the servers are equally capable, the client can choose to connect to any other servers with the same request.
+As long as the total number of failed servers is less than half of the total, LCH will work normally.
+This result is implied by the fault-tolerant characteristic of the Paxos protocol.
 
-\subsection{Online Edits}
-\subsection{A Typical Workflow}
+To see rigorously how replication improves the reliability, we can do some simple maths.
+
+When a failed server is restarted, it must start in a catch-up mode.
+The catch-up mode will help the failed server catch up all the information it missed during failures.
+They are essentially the results of previous Paxos rounds.
+Before it can serve in normal mode again, it must ensure that the data stored on it is synchronized with every other sever.
+We will discuss the techniques used in the catch-up mode in detail in Section~\ref{sec:impl}.
+
 
 \section{Implementation}
 \label{sec:impl}
