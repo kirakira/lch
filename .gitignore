@@ -3,3 +3,5 @@ writeup/*.aux
 writeup/*.pdf
 writeup/*.log
 writeup/*.out
+writeup/*.bbl
+writeup/*.blg

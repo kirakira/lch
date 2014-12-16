@@ -11,6 +11,7 @@
 \usepackage{xcolor,listings}
 \usepackage{multirow}
 \usepackage{hyperref}
+\usepackage{varwidth}
 \newtheorem{thm}{Theorem}
 
 \setcounter{secnumdepth}{4}
@@ -28,7 +29,7 @@
 \abstract{
     Today popular source code version control systems do not replicate data for reliability.
     We share our experience in building LCH (abbreviated from Launch), a reliable source code version control system.
-    LCH replicates data on multiple servers and uses the Paxos\ref{paxos} protocol along with an update log to provide strong consistency to clients.
+    LCH replicates data on multiple servers and uses the Paxos\cite{paxos} protocol along with an update log to provide strong consistency to clients.
     With a three-step catch-up mode, LCH can also recover from failures seamlessly.
     Our test results show LCH is a reliable version control system.
 }
@@ -69,12 +70,12 @@ This motivates our project.
 Simply speaking, LCH is a version control system that will store source code reliably on a distributed set of servers.
 Source code is different from other application in that it needs to be precise at any time.
 Thus strong consistency needs to be preserved while replicating data.
-Paxos\ref{paxos} is a protocol that solves the consensus problem in a distributed system.
+Paxos\cite{paxos} is a protocol that solves the consensus problem in a distributed system.
 With the help of an update log, we can build a strongly consistent distributed system that replicates data across many servers.
 
 LCH is designed to tolerate failures.
 When a failed server is restarted, it will first operate in a 3-step catch-up mode.
-Unlike the catch-up mode proposed by Google \ref{paxos2}, we add an additional third step that will make sure everything missed out is collected.
+Unlike the catch-up mode proposed by Google \cite{paxos2}, we add an additional third step that will make sure everything missed out is collected.
 The catch-up mode will be discussed in detail in Section~\ref{sec:impl}.
 
 In the original protocol, it is possible that Paxos rounds keep failing because multiple proposers make conflicting proposes in an alternating way.
@@ -96,6 +97,13 @@ In this section we will discuss the design of LCH, as well as our reasonings beh
 LCH is a client-server application.
 Unlike a traditional version control system, user data is replicated on multiple LCH servers for reliability.
 Figure~\ref{fig:1} shows a typical topology structure of LCH.
+
+\begin{figure}[ht!]
+\centering
+\includegraphics[width=110mm]{architecture.jpg}
+\caption{Architecture of LCH}
+    \label{fig:1}
+\end{figure}
 
 \subsection{Distributed Servers}
 LCH is a distributed system.
@@ -162,6 +170,23 @@ Otherwise, the user must run a \texttt{sync} command to pull latest changes from
 Conflicts may happen during this step, and if this is the case, the user must resolve conflicts given the remote file and the local file.
 When conflicts are resolved, the user can run another \texttt{commit} command to submit previous changes (along with the conflict resolution).
 
+\begin{figure}[ht!]
+    \centering
+    \begin{varwidth}{\textwidth}
+\begin{enumerate}
+    \item Initialization
+    \item Make changes
+    \item \texttt{sync}
+    \item Resolve conflicts
+    \item \texttt{commit}
+    \item Accepted? Goto step $2$; otherwise goto step $3$.
+\end{enumerate}
+\end{varwidth}
+\caption{A typical workflow}
+    \label{fig:2}
+\end{figure}
+
+
 \subsection{Full Replication}
 Every LCH server is identical and equally capable.
 This means, every LCH server will store a whole database of all history commits.
@@ -206,7 +231,7 @@ We coded LCH from scratch in Java and the source code is available online\footno
 
 \subsection{Paxos and Update Log}
 \label{sec:paxos}
-Paxos is a consensus protocol introduced in \ref{paxos}.
+Paxos is a consensus protocol introduced in \cite{paxos}.
 It solves the following problem:
 every server has its own proposal, and the group of servers want to agree on one of the proposals.
 In LCH, every server will store a database containing all the accepted commits, and the database stored in every server should all be identical.
@@ -279,38 +304,104 @@ To get synchronized with the latest state, it executes in catch-up mode.
         As a result, the current server will not learn the result.
         This missed result will need to be collected in step $3$.
 \end{enumerate}
-The above catch-up mode is different from the catch-up mode introduced in \ref{paxos2} in that it adds a third step that will collect all updates missed during the execution of the first and the second step.
+The above catch-up mode is different from the catch-up mode introduced in \cite{paxos2} in that it adds a third step that will collect all updates missed during the execution of the first and the second step.
 
 \subsection{Random Backoff}
+The traditional Paxos protocol may not make any progress when two or more proposers make conflicting proposals alternately,
+as is noted in \cite{paxos}.
+The random backoff protocol is a randomized solution that can mitigate this issue.
+
+Intuitively, a Paxos round will fail because too many proposers are proposing in the same time.
+Thus our goal is to restrict the number of proposers, and the interleave the time they propose.
+To be precise, when a failed Paxos round is detected (that is, when multiple proposers are proposing and more than half of the ``rejected'' votes are received for both proposal),
+random backoff process will be triggered.
+The server will with probability $1-1/k$ stop proposing for $t$ seconds, where $k$ is the number of active proposers detected, and $t$ is selected uniformly at random from a preconfigured time interval.
+Note that $1-1/k$ is chosen in a way that will maximize the probability that exactly one proposer will keep proposing
+(as a necessary condition, one can check that the expected number of proposers that will keep proposing is $k\left(1-\left(1-1/k\right)\right)=1$).
 
 \subsection{Client}
 
-LCH provides users with a simple interface to maintain a \emph{linear} version history. Each version is called a commit, and an integer version number is associated with every commit. LCH provides two commands to work with: sync and commit. 
-\begin{itemize}
-  \item sync: pull changes from the server since the last commit in the local workset, and write those changes to corresponding local files. If a conflict is detected (both remote and local change the same place), user will be directed to resolve the conflict.
-  \item commit: push local changes to the server as a new commit. The commit will be accepted if and only if the local version it is based on is up to date (i.e., last local commit matches the most recent commit on the server). If the commit is rejected, the user will be prompted to run a synccommand first.
+The client will store a list of remote servers.
+Each request will be routed to a randomly chosen server from the list, in case failures happen.
+In addition, a metadata folder will be created.
+This folder will contain all history commits.
+For each commit, we store the difference of each changed file from the last version.
 
-\end{itemize}
-A typical work flow of the client is as belows.
-\begin{itemize}
-  \item Initialization
-  \item Make local changes
-  \item sync
-  \item Resolve conflicts
-  \item commit
-  \item Accepted? If yes, goto make local change; if no, goto sync
-\end{itemize}
+When processing a \texttt{sync} command, a sync request enclosed with the current local version number is sent to a randomly chosen server from the server list.
+The server will respond with a list of commits since the current local version.
+Then we compare every local local change with its corresponding remote change to detect for conflicts.
+If a conflict is found, it will be reported and its corresponding remote version of the file will be saved as a temporary file for the user to resolve the conflict.
+If a file is not in conflict, then it is updated to the latest version automatically.
+Finally, the metadata file and the local version number is updated to reflect the latest remote version as returned by the server.
 
-We note implementation details: First, when initialize the client, we need to set the directory for local copy and the path for metadata file. The metadata file stores the version information of latest sync from the server. Second, when doing sync, we first randomly ask a server to get the metadata and all changed information since the last sync version. Then, we compare the local changes on the last sync version and the changes of the latest version, if the two changes are different, we report a conflict file. For each conflict file, we update the file to latest server version, but make the copy the local changed version and warn user to resolve the conflict. Third, when doing commit, the client will first randomly ask a server the latest version, only when the versions are the same the commit can proceed. Send all changed files to the server, once the server returns ``successfully committed'', the client update the metadata file.
+When processing a \texttt{commit} command, we scan the current folder for all changes made, based on the latest version stored in the metadata file.
+Then a commit request is sent to a randomly chosen server along with the current local version number and all the local changes made.
+If the server responds ``accept'', the local version number is updated.
+Otherwise, depending on the reason of failure, either the client will retry if the commit is rejected because of a failed Paxos round, or the user will be directed to run the ``sync'' command if it is because out-of-date local repository.
 
 \section{Evaluation}
 \label{sec:eval}
+We evaluated the correctness and performance of our implementation.
+The correctness test mainly focuses on the Paxos protocol and the catch-up mode.
+The performance test reveals the relationship between the average commit latency and the number of servers.
+
 \subsection{Consistency Test}
+We set up $10$ servers and $10$ clients.
+This test consists of several rounds.
+In each round, all the clients submit a commit request to its corresponding server (i.e. client $0$ contacts server $0$, client $1$ contacts server $1$, etc.) at the same time.
+Since Paxos should select at most $1$ commits to process, we expected at most $1$ commit will be accepted.
+
+Our results show that in $9$ out of $10$ rounds exactly $1$ commit is accepted, and in the rest round no commits are accepted due to Paxos round failure.
+
 \subsection{Reliability Test}
-\subsection{Throughput Test}
+We set up $3$ servers and $1$ client.
+We make the client keep submitting random commits.
+In the meanwhile, we turned down one of the servers.
+
+We observed that although the average latency of commits has increased significantly (because when the commit is submitted to the failed server, the client needs to wait until timeout), commits are still being accepted as they should be.
+
+\subsection{Catch-up Mode Test}
+After the reliability test, we restarted the server that we turned down previously in catch-up mode, while the client is still submitting random commits.
+It is observed that after a while, the average latency went to normal level again.
+
+\subsection{Latency Test}
+We tested the average latency of commit requests.
+We first set up $n$ servers on the local machine (so as to minimize network latency), and make a local client submit $100$ commits sequentially.
+Then we measure the total time used.
+Since a Paxos round with $n$ servers will communicate $O(n^2)$ messages, we expect the average latency will increase with the number of servers.
+In practice this is not a problem because usually $n$ is chosen to be fairly small, i.e. $n=3$ or $n=5$.
+
+Results of the latency test are summarized in Table~\ref{tab:perf} and Figure~\ref{fig:perf}.
+\begin{table}[ht!]
+    \center
+\begin{tabular}{c|ccccc}
+    \hline
+    \hline
+    Number of servers & $3$ & $5$ & $7$ & $9$ \\
+    \hline
+    Average commit latency (ms) & $21.97$ & $36.49$ & $60.17$ & $77.63$ \\
+    \hline
+    \hline
+\end{tabular}
+\caption{Average commit latency with different number of servers}
+\label{tab:perf}
+\end{table}
+
+\begin{figure}[ht!]
+\centering
+\includegraphics[width=12cm]{perf.eps}
+\caption{Average commit latency with different number of servers}
+\label{fig:perf}
+\end{figure}
 
 \section{Conclusion}
 \label{sec:conclusion}
+This project demonstrates LCH, a reliable source code version control system by replicating data on multiple servers.
+It uses the Paxos protocol along with an update log to maintain strong consistency.
+It features a $3$-step catch-up mode to make failed servers recover from failures seamlessly.
+The random backoff protocol also makes the Paxos round more efficient when many proposers are proposing conflicting values.
+Our evaluations show LCH has met all its design expectations.
+
 
 \appendix
 \section{A Proof that Replication Improves Reliability}
@@ -323,7 +414,7 @@ We note implementation details: First, when initialize the client, we need to se
     Let $S \subset \left\{1,\ldots,2n+1\right\}$ be the set of failed servers.
     The probability that $m$ out of $2n+1$ servers fail simultaneously (denote as $\Pr(|S|=m)$) is 
     \begin{eqnarray*}
-        P(S=m) = \binom{2n+1}{m} p^{m} (1-p)^{2n+1-m},
+        \Pr(S=m) = \binom{2n+1}{m} p^{m} (1-p)^{2n+1-m},
     \end{eqnarray*}
     where $\binom{2n+1}{m}$ is the binomial coefficient.
     The probability that more than $n$ servers fails is denoted as $\Pr(|S|\geq n+1)$.
@@ -333,13 +424,13 @@ We note implementation details: First, when initialize the client, we need to se
     To prove that $\Pr(|S|\geq n+1) < p$, we first show prove that $\Pr(|S|\geq n+1)/p = 1$ 
     when $p=1/2$. It is because
     \begin{eqnarray*}
-        P(|S|\geq n+1) &=& \sum_{m=n+1}^{2n+1} \binom{2n+1}{m} p^{m} (1-p)^{2n+1-m} \\ 
+        \Pr(|S|\geq n+1) &=& \sum_{m=n+1}^{2n+1} \binom{2n+1}{m} p^{m} (1-p)^{2n+1-m} \\ 
         (because~p=1/2)~&=& \sum_{m=n+1}^{2n+1} \binom{2n+1}{m} \left(\frac{1}{2}\right)^{2n+1} \\
         \left(because~\binom{2n+1}{m}=\binom{2n+1}{2n+1-m}\right)~&=& \frac{1}{2}\left(  \sum_{m=0}^{2n+1} 
         \binom{2n+1}{m} \left(\frac{1}{2}\right)^{2n+1} \right) \\
         &=& \frac{1}{2}.
     \end{eqnarray*}
-    We then prove that the $P(|S|\leq n+1)/p$ is monotonously increasing with as $p$ 
+    We then prove that the $\Pr(|S|\leq n+1)/p$ is monotonously increasing with as $p$ 
     increasing (and $p<1/2$) by showing the derivative with respect to $p$ is positive
     \begin{eqnarray*}
         \frac{\mathrm{d}}{\mathrm{d}p}\Pr(|S|\geq n+1)/p &=& \sum_{m=n+1}^{2n+1} \binom{2n+1}{m} \left(\left(m-1\right)p^{m-2}
@@ -356,11 +447,7 @@ We note implementation details: First, when initialize the client, we need to se
     $p$.
 \end{proof}
 
-
-\section{References}
-
-[1] Lamport, L. (2001). Paxos made simple. ACM Sigact News, 32(4), 18-25.
-
-[2] Chandra, T. D., Griesemer, R., \& Redstone, J. (2007, August). Paxos made live: an engineering perspective. In Proceedings of the twenty-sixth annual ACM symposium on Principles of distributed computing (pp. 398-407). ACM.
+\bibliography{refs}{}
+\bibliographystyle{plain}
 
 \end{document}
