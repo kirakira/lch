@@ -1,6 +1,7 @@
 \documentclass[11pt]{article}
 \usepackage{fullpage}
 \usepackage{epstopdf}
+\usepackage{titlesec}
 \usepackage{amssymb,amsmath}
 \usepackage{amsthm}
 %\usepackage{subfigure}
@@ -10,6 +11,12 @@
 \usepackage{xcolor,listings}
 \usepackage{multirow}
 \usepackage{hyperref}
+
+\setcounter{secnumdepth}{4}
+\titleformat{\paragraph}
+{\normalfont\normalsize\bfseries}{\theparagraph}{1em}{}
+\titlespacing*{\paragraph}
+{0pt}{3.25ex plus 1ex minus .2ex}{1.5ex plus .2ex}
 
 \title{LCH: A Reliable Distributed Source Code Version Control System}
 \author{Shike Mei, Menghui Wang, and Lichao Yin}
@@ -191,10 +198,59 @@ They are essentially the results of previous Paxos rounds.
 Before it can serve in normal mode again, it must ensure that the data stored on it is synchronized with every other sever.
 We will discuss the techniques used in the catch-up mode in detail in Section~\ref{sec:impl}.
 
-
 \section{Implementation}
 \label{sec:impl}
+In this section we will discuss various implementation details when we build LCH.
+We coded LCH from scratch in Java and the source code is available online\footnotemark.
+\footnotetext{\url{https://github.com/kirakira/lch}.}
+
 \subsection{Paxos and Update Log}
+\label{sec:paxos}
+Paxos is a consensus protocol introduced in \ref{paxos}.
+It solves the following problem:
+every server has its own proposal, and the group of servers want to agree on one of the proposals.
+In LCH, every server will store a database containing all the accepted commits, and the database stored in every server should all be identical.
+The Paxos protocol is used to select a request to modify the database.
+Since all servers run in parallel, it is possible that at the same time multiple servers have received commit requests.
+By our consistency requirement, only one commit can be based on the current version.
+Then which commit request should we process?
+This is when the Paxos protocol comes into play.
+We will use the Paxos protocol to make all servers agree on one commit request to \emph{process}.
+
+Though we select one commit request globally, the selected request is then being processed locally with the help of the update log.
+The update log contains the results of all previous Paxos rounds, i.e. all the commits that were selected to process (but not necessarily to accept due to the existence of out-of-date commits).
+After a Paxos round finishes, a new entry is first being added to the update log carrying the result of this Paxos round.
+The newly added entry is marked as ``unfinished'' at this time.
+It is first decided, according to the server's local database, whether this commit should be accepted based on the following criteria: if this commit is based on the current version, then it should be accepted; otherwise it should not.
+If it is decided that the commit should be accepted, the server then applies the commit in the database.
+Finally, the server modifies the corresponding entry in the update log to change its state to ``finished''.
+If the current server happens to be the server that received the request, it will then notify the client the result of this commit.
+
+\subsubsection{Implementation Details}
+The original Paxos protocol has $3$ roles: proposer, acceptor, and learner.
+We combined the latter two roles, and used $2$ threads each server doing the Paxos logic.
+One thread will listen to client's \texttt{commit} requests and acts as the proposer.
+The other thread will act as the acceptor and learner.
+
+A global condition variable \texttt{roundFinish} will be used to synchronize the two threads.
+\texttt{roundFinish} will be signaled by the acceptor and learner thread when a Paxos round has finished.
+
+The activity of a proposer is initialized by an incoming commit request.
+Only one commit request will be processed at the same time.
+The proposer will first select a unique proposal number higher than any previous proposal numbers as follows:
+it selects an integer $x$ greater than any previous proposal numbers and such that $x \equiv i \mod n$ where $n$ is the total number of proposers and $i$ is the $0$-based index of the current proposer.
+It then starts to make proposals to every server (including itself) as specified by the Paxos protocol.
+After all accept requests are sent out, it sleeps on the condition variable \texttt{roundFinish}, waiting for the result to be notified by the learner thread.
+After being waken (or timed out after $10$ seconds), it checks the database to see if the request commit has been applied or not.
+If everything goes well, the commit should pass the Paxos round and be learned by the learner thread (by writing to the update log and the database)
+Finally the proposer will notify the result (accepted or not) to client.
+
+The activity of the acceptor and learner thread is initialized by incoming Paxos packets (prepare, accept request, accepted, rejected).
+The thread is implemented as a state machine, where the state includes the most recent promise \texttt{promise} made in this round, and the highest numbered proposal accepted \texttt{accepted}.
+A round is regard as finish when more than half ``accepted'' are received for some proposal.
+When a round is finished, \texttt{promise} and \texttt{accepted} are first cleared, and then the update log and the local database is updated atomically if necessary according to the selected commit request as is specified in \ref{sec:paxos}.
+Finally, the condition variable \texttt{roundFinish} is signaled to wake all proposers sleeping on that.
+
 \subsection{Catch-up Mode}
 \subsection{Random Backoff}
 \subsection{Client}
