@@ -56,7 +56,7 @@ Due to different applications, a version control system can differ from another 
 \end{itemize}
 
 Replication is the key to reliability.
-However from the list above one can see that today few version control systems replicate data.
+However from the list above one can see that today few version control system replicates data.
 This motivates our project.
 Simply speaking, LCH is a version control system that will store source code reliably on a distributed set of servers.
 Source code is different from other application in that it needs to be precise at any time.
@@ -168,9 +168,9 @@ We do not choose to partition our data for the following reasons:
 \end{itemize}
 
 \subsection{Strong Consistency}
-Source code must be precise at all times.
-Therefore we choose to preserve strong consistency in our system.
-That is, every \texttt{sync} command will return the latest version by a most recent \texttt{commit}.
+When designing our consistency model, our criteria is ``every commit submitted must base on the things that the user has already \emph{seen}'', because source code must be precise at all times.
+Therefore we choose to maintain strong consistency and let user to resolve conflicts.
+That is, every \texttt{sync} command will return the latest version by a most recent \texttt{commit}, and no commit shall be accepted unless it is based on the latest version.
 
 Strong consistency is at the cost of reduced throughput.
 To preserve strong consistency, every commit must go through a full Paxos round, which will involve all servers to participate.
@@ -178,7 +178,7 @@ As a result, only one commit will be accepted at a time among all servers.
 However, as a tool for managing source code, we do not anticipate a very high concurrent commit rate.
 
 \subsection{Fault-Tolerant and Recovery}
-LCH tolerates failures by replication.
+LCH tolerates non-Byzantine failures by replication.
 When a server failed, since all the servers are equally capable, the client can choose to connect to any other servers with the same request.
 As long as the total number of failed servers is less than half of the total, LCH will work normally.
 This result is implied by the fault-tolerant characteristic of the Paxos protocol.
